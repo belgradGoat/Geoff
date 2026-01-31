@@ -1,0 +1,196 @@
+"""FastMCP server for Agent Task Planner."""
+
+from typing import Optional
+
+from fastmcp import FastMCP
+
+from .tools import (
+    add_note,
+    add_subtask,
+    claim_task,
+    complete_task,
+    create_task,
+    fail_task,
+    get_ready_tasks,
+    get_task,
+    list_tasks,
+    update_progress,
+)
+
+# Create the FastMCP server
+mcp = FastMCP("Agent Task Planner")
+
+
+@mcp.tool()
+def task_list(
+    status: Optional[str] = None,
+    assigned_agent: Optional[str] = None,
+    parent_id: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """
+    List tasks with optional filters.
+
+    Args:
+        status: Filter by status (queued, ready, assigned, in_progress, done, failed, blocked)
+        assigned_agent: Filter by assigned agent ID
+        parent_id: Filter by parent task ID (for subtasks)
+        limit: Maximum number of tasks to return (default 50)
+    """
+    return list_tasks(status=status, assigned_agent=assigned_agent, parent_id=parent_id, limit=limit)
+
+
+@mcp.tool()
+def task_get(task_id: str) -> dict:
+    """
+    Get a specific task by ID with its logs and subtasks.
+
+    Args:
+        task_id: The UUID of the task
+    """
+    return get_task(task_id)
+
+
+@mcp.tool()
+def task_get_ready(limit: int = 10) -> dict:
+    """
+    Get tasks that are ready to be claimed.
+
+    Args:
+        limit: Maximum number of tasks to return
+    """
+    return get_ready_tasks(limit=limit)
+
+
+@mcp.tool()
+def task_claim(task_id: str, agent_id: str) -> dict:
+    """
+    Atomically claim a task for an agent. Only works on 'ready' tasks.
+
+    Args:
+        task_id: The UUID of the task to claim
+        agent_id: The ID of the agent claiming the task
+    """
+    return claim_task(task_id, agent_id)
+
+
+@mcp.tool()
+def task_update_progress(
+    task_id: str, agent_id: str, progress: int, note: Optional[str] = None
+) -> dict:
+    """
+    Update task progress (0-100).
+
+    Args:
+        task_id: The UUID of the task
+        agent_id: The ID of the agent (must match assigned agent)
+        progress: Progress percentage (0-100)
+        note: Optional progress note
+    """
+    return update_progress(task_id, agent_id, progress, note=note)
+
+
+@mcp.tool()
+def task_complete(task_id: str, agent_id: str, result: Optional[str] = None) -> dict:
+    """
+    Mark a task as completed.
+
+    Args:
+        task_id: The UUID of the task
+        agent_id: The ID of the agent (must match assigned agent)
+        result: Optional result/output description
+    """
+    return complete_task(task_id, agent_id, result=result)
+
+
+@mcp.tool()
+def task_fail(task_id: str, agent_id: str, error_message: str, retry: bool = True) -> dict:
+    """
+    Mark a task as failed. Will auto-retry if retries remaining.
+
+    Args:
+        task_id: The UUID of the task
+        agent_id: The ID of the agent (must match assigned agent)
+        error_message: Description of what went wrong
+        retry: Whether to queue for retry if retries remaining
+    """
+    return fail_task(task_id, agent_id, error_message, retry=retry)
+
+
+@mcp.tool()
+def task_add_subtask(
+    parent_id: str,
+    title: str,
+    description: Optional[str] = None,
+    priority: int = 0,
+    complexity: str = "unknown",
+) -> dict:
+    """
+    Add a subtask to an existing task.
+
+    Args:
+        parent_id: The UUID of the parent task
+        title: Title of the subtask
+        description: Optional description
+        priority: Priority level (higher = more important)
+        complexity: Complexity estimate (trivial, small, medium, large, unknown)
+    """
+    return add_subtask(parent_id, title, description=description, priority=priority, complexity=complexity)
+
+
+@mcp.tool()
+def task_add_note(task_id: str, agent_id: str, note: str) -> dict:
+    """
+    Add a note to a task's log.
+
+    Args:
+        task_id: The UUID of the task
+        agent_id: The ID of the agent adding the note
+        note: The note content
+    """
+    return add_note(task_id, agent_id, note)
+
+
+@mcp.tool()
+def task_create(
+    title: str,
+    description: Optional[str] = None,
+    priority: int = 0,
+    complexity: str = "unknown",
+    depends_on: Optional[list[str]] = None,
+    tags: Optional[list[str]] = None,
+    context: Optional[dict] = None,
+    estimated_minutes: Optional[int] = None,
+) -> dict:
+    """
+    Create a new task.
+
+    Args:
+        title: Task title
+        description: Task description
+        priority: Priority level (higher = more important)
+        complexity: Complexity estimate (trivial, small, medium, large, unknown)
+        depends_on: List of task IDs this task depends on
+        tags: List of tags
+        context: Additional context as JSON
+        estimated_minutes: Estimated time to complete
+    """
+    return create_task(
+        title=title,
+        description=description,
+        priority=priority,
+        complexity=complexity,
+        depends_on=depends_on,
+        tags=tags,
+        context=context,
+        estimated_minutes=estimated_minutes,
+    )
+
+
+def main():
+    """Run the MCP server."""
+    mcp.run()
+
+
+if __name__ == "__main__":
+    main()
