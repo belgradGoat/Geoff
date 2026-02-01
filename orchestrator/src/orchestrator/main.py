@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api.agents import router as agents_router
 from .api.websocket import router as websocket_router
+from .api.projects import router as projects_router
+from .api.filesystem import router as filesystem_router
 from .core.config import get_settings
 
 app = FastAPI(
@@ -26,6 +28,8 @@ app.add_middleware(
 # Include routers
 app.include_router(agents_router)
 app.include_router(websocket_router)
+app.include_router(projects_router)
+app.include_router(filesystem_router)
 
 
 @app.get("/health")
@@ -42,6 +46,7 @@ async def root():
         "version": "0.1.0",
         "endpoints": {
             "agents": "/api/agents",
+            "projects": "/api/projects",
             "health": "/health",
         },
     }

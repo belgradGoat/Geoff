@@ -6,12 +6,13 @@ This guide covers how to use Agent Task Planner for managing tasks and orchestra
 
 1. [Getting Started](#getting-started)
 2. [Using the Web UI](#using-the-web-ui)
-3. [Project Management](#project-management)
-4. [Task Management](#task-management)
-5. [Agent Orchestration](#agent-orchestration)
-6. [Remote Access via Tailscale](#remote-access-via-tailscale)
-7. [Using MCP Tools](#using-mcp-tools)
-8. [Tips and Best Practices](#tips-and-best-practices)
+3. [File Browser](#file-browser)
+4. [Project Management](#project-management)
+5. [Task Management](#task-management)
+6. [Agent Orchestration](#agent-orchestration)
+7. [Remote Access via Tailscale](#remote-access-via-tailscale)
+8. [Using MCP Tools](#using-mcp-tools)
+9. [Tips and Best Practices](#tips-and-best-practices)
 
 ---
 
@@ -110,6 +111,16 @@ This guide covers how to use Agent Task Planner for managing tasks and orchestra
 
 ## Using the Web UI
 
+The web UI is available at `http://localhost:4011` and has three main tabs:
+
+### Navigation Tabs
+
+| Tab | Description |
+|-----|-------------|
+| **Tasks** | Task management, quick add, and agent launching |
+| **Files** | Browse your Mac's filesystem, view file contents |
+| **Settings** | Remote access configuration, Tailscale setup |
+
 ### Task List View
 
 The main view shows tasks grouped by status:
@@ -161,28 +172,78 @@ Click any task to view and edit details:
 
 ---
 
+## File Browser
+
+The **Files** tab provides a full filesystem browser that works locally and remotely via Tailscale.
+
+### Features
+
+- **Navigate directories**: Click folders to enter, use back arrow to go up
+- **View files**: Click any text file to view its contents
+- **Quick access**: Buttons for Home, Documents, GitHub, Desktop, etc.
+- **Show hidden files**: Toggle to see dotfiles and hidden directories
+- **File information**: Size, modification date, file type icons
+
+### Supported File Types
+
+The file viewer can display:
+- Code files: `.js`, `.ts`, `.tsx`, `.py`, `.go`, `.rs`, `.java`, `.c`, `.cpp`, etc.
+- Config files: `.json`, `.yaml`, `.toml`, `.env`, `.xml`, etc.
+- Documentation: `.md`, `.txt`
+- Shell scripts: `.sh`, `.bash`, `.zsh`
+
+Binary files (images, PDFs, executables) cannot be viewed but are listed in the directory.
+
+### Remote File Access
+
+When accessing the web UI remotely via Tailscale:
+- You're browsing your **Mac's filesystem** from your phone/laptop
+- Files are read through the orchestrator running on your Mac
+- Changes you make to tasks can reference files you see in the browser
+
+### How to Get a File Path
+
+1. Navigate to the file in the File Browser
+2. The full path is shown in the path bar at the top
+3. Use this path when creating tasks or configuring agents
+
+---
+
 ## Project Management
 
 Projects allow you to organize tasks and agents by codebase or work area.
 
 ### Creating Projects
 
-**Via Web UI:**
-1. Click the project dropdown at the top
-2. Click "New Project"
-3. Enter project name and file path
-4. Click "Create"
+**Via Web UI (Folder Scan - Recommended):**
+1. Click **"Scan Folder"** in the Project section
+2. Paste your projects folder path (e.g., `/Users/you/Documents/GitHub`)
+   - Tip: In Finder, right-click folder → "Copy as Pathname"
+3. Click **"Scan"**
+4. The system finds all code projects (directories with `package.json`, `pyproject.toml`, `.git`, etc.)
+5. Click **"Import All"** or import projects individually
 
 **Via MCP Tools:**
 ```
 project_create(name="My App", path="/Users/me/projects/my-app", description="Main application")
 ```
 
-**Via Folder Scan:**
+**Via MCP Folder Scan:**
 ```
 project_scan(base_path="/Users/me/projects")
 ```
-This scans a directory and creates projects for each subdirectory that looks like a code project (has package.json, pyproject.toml, Cargo.toml, etc.).
+
+### Project Detection
+
+When scanning, the system recognizes projects by these markers:
+- `package.json` (Node.js)
+- `pyproject.toml` (Python)
+- `Cargo.toml` (Rust)
+- `go.mod` (Go)
+- `pom.xml` / `build.gradle` (Java)
+- `Gemfile` (Ruby)
+- `.git` (any Git repository)
+- And more...
 
 ### Project Fields
 
@@ -350,6 +411,16 @@ When you select an agent, its output streams live via WebSocket. You'll see:
 
 Tailscale allows you to securely access the orchestrator and web UI from anywhere (phone, laptop, etc.) without exposing ports to the public internet.
 
+### Quick Check via Settings Tab
+
+The **Settings** tab in the web UI shows:
+- Your Mac's hostname and platform
+- Tailscale connection status
+- Your Tailscale IP (if connected)
+- Ready-to-copy URLs for remote access
+
+If Tailscale is not detected, it will show setup instructions.
+
 ### Setup
 
 1. **Install Tailscale** on your Mac:
@@ -400,12 +471,25 @@ Tailscale allows you to securely access the orchestrator and web UI from anywher
 
 1. Open Safari on iPhone
 2. Go to `http://100.x.y.z:4011`
-3. Select a project
-4. Enter a prompt: "Fix the bug in the login form"
-5. Click "Launch Agent"
-6. Watch the agent work in real-time
+3. Select a project from the dropdown
+4. Optionally check the **Files** tab to browse your Mac's filesystem
+5. Go to **Tasks** tab, enter a prompt: "Fix the bug in the login form"
+6. Click "Launch Agent"
+7. Watch the agent work in real-time
 
 The agent runs on your Mac, but you control it from anywhere.
+
+### What You Can Do Remotely
+
+| Feature | Works Remotely? |
+|---------|-----------------|
+| View/create/edit tasks | Yes |
+| Browse Mac filesystem | Yes |
+| View file contents | Yes |
+| Launch Claude agents | Yes |
+| Stream agent output | Yes |
+| Stop running agents | Yes |
+| Scan for projects | Yes |
 
 ---
 

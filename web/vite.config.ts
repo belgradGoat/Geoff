@@ -5,5 +5,6 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 4011,
+    host: true,  // Listen on all interfaces (required for Tailscale access)
   },
 })
