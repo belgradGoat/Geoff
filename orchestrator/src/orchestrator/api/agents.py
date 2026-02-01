@@ -1,14 +1,25 @@
 """Agent CRUD API endpoints."""
 
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from supabase import create_client
 
 from ..core.agent_manager import get_agent_manager, AgentManager
 from ..core.security import verify_api_key
+from ..core.config import get_settings
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
+
+
+def get_supabase_client():
+    """Get Supabase client for project lookups."""
+    settings = get_settings()
+    if settings.supabase_url and settings.supabase_service_key:
+        return create_client(settings.supabase_url, settings.supabase_service_key)
+    return None
 
 
 class LaunchAgentRequest(BaseModel):
@@ -16,6 +27,7 @@ class LaunchAgentRequest(BaseModel):
 
     prompt: str
     working_dir: Optional[str] = None
+    project_id: Optional[str] = None
     agent_id: Optional[str] = None
 
 
@@ -57,9 +69,19 @@ async def launch_agent(
 ) -> AgentResponse:
     """Launch a new Claude agent."""
     try:
+        working_dir = request.working_dir
+
+        # If project_id provided, fetch project path from Supabase
+        if request.project_id and not working_dir:
+            supabase = get_supabase_client()
+            if supabase:
+                result = supabase.table("projects").select("path").eq("id", request.project_id).single().execute()
+                if result.data:
+                    working_dir = result.data["path"]
+
         agent = await manager.launch_agent(
             prompt=request.prompt,
-            working_dir=request.working_dir,
+            working_dir=working_dir,
             agent_id=request.agent_id,
         )
         return AgentResponse(**agent.to_dict())

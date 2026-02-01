@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAgents } from '../../hooks/useAgents'
+import { useTasks } from '../../hooks/useTasks'
+import { useProjects } from '../../hooks/useProjects'
 import { Agent } from '../../lib/orchestrator'
 
 const statusColors: Record<Agent['status'], string> = {
@@ -99,6 +101,10 @@ export function AgentPanel() {
     selectAgent,
   } = useAgents()
 
+  const { projectFilter } = useTasks()
+  const { projects } = useProjects()
+  const selectedProject = projects.find(p => p.id === projectFilter)
+
   const [prompt, setPrompt] = useState('')
   const [workingDir, setWorkingDir] = useState('')
   const [isLaunching, setIsLaunching] = useState(false)
@@ -113,7 +119,12 @@ export function AgentPanel() {
     if (!prompt.trim()) return
     setIsLaunching(true)
     try {
-      const agent = await launchAgent(prompt.trim(), workingDir || undefined)
+      // Use project_id if a project is selected, otherwise use workingDir
+      const agent = await launchAgent(
+        prompt.trim(),
+        workingDir || undefined,
+        projectFilter || undefined
+      )
       if (agent) {
         selectAgent(agent.id)
         setPrompt('')
@@ -139,22 +150,37 @@ export function AgentPanel() {
           rows={2}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={workingDir}
-            onChange={(e) => setWorkingDir(e.target.value)}
-            placeholder="Working directory (optional)"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            onClick={handleLaunch}
-            disabled={isLaunching || !prompt.trim()}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isLaunching ? 'Launching...' : 'Launch Agent'}
-          </button>
-        </div>
+        {selectedProject ? (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 truncate">
+              Project: {selectedProject.name} ({selectedProject.path})
+            </div>
+            <button
+              onClick={handleLaunch}
+              disabled={isLaunching || !prompt.trim()}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLaunching ? 'Launching...' : 'Launch Agent'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={workingDir}
+              onChange={(e) => setWorkingDir(e.target.value)}
+              placeholder="Working directory (or select a project)"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleLaunch}
+              disabled={isLaunching || !prompt.trim()}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLaunching ? 'Launching...' : 'Launch Agent'}
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (

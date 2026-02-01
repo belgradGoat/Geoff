@@ -6,10 +6,12 @@ This guide covers how to use Agent Task Planner for managing tasks and orchestra
 
 1. [Getting Started](#getting-started)
 2. [Using the Web UI](#using-the-web-ui)
-3. [Task Management](#task-management)
-4. [Agent Orchestration](#agent-orchestration)
-5. [Using MCP Tools](#using-mcp-tools)
-6. [Tips and Best Practices](#tips-and-best-practices)
+3. [Project Management](#project-management)
+4. [Task Management](#task-management)
+5. [Agent Orchestration](#agent-orchestration)
+6. [Remote Access via Tailscale](#remote-access-via-tailscale)
+7. [Using MCP Tools](#using-mcp-tools)
+8. [Tips and Best Practices](#tips-and-best-practices)
 
 ---
 
@@ -46,8 +48,53 @@ This guide covers how to use Agent Task Planner for managing tasks and orchestra
    - `001_initial_schema.sql` - Creates tables and indexes
    - `002_rls_policies.sql` - Sets up row-level security
    - `003_triggers.sql` - Adds automatic behaviors
+   - `004_projects.sql` - Adds multi-project support
 
-3. **Start the Services**
+3. **Install the MCP Server**
+
+   Create and activate a virtual environment, then install the MCP server:
+   ```bash
+   cd /path/to/AgentTaskPlanner
+   python3 -m venv env
+   source env/bin/activate
+   cd mcp-server
+   pip install -e .
+   ```
+
+4. **Add MCP Server to Claude Code**
+
+   Use `--scope user` so the MCP server is available to ALL Claude instances (including agents spawned by the orchestrator):
+
+   ```bash
+   claude mcp add-json --scope user agent-task-planner '{
+     "type": "stdio",
+     "command": "/path/to/AgentTaskPlanner/env/bin/python",
+     "args": ["-m", "agent_task_planner.server"],
+     "env": {
+       "SUPABASE_URL": "https://your-project.supabase.co",
+       "SUPABASE_SERVICE_KEY": "your-service-key-here"
+     }
+   }'
+   ```
+
+   **Important notes:**
+   - Replace `/path/to/AgentTaskPlanner` with your actual project path
+   - Use the **full absolute path** to your virtual environment's Python
+   - The `--scope user` flag is critical for orchestrator-spawned agents to access the MCP tools
+
+   Verify the server is connected:
+   ```bash
+   claude mcp list
+   ```
+
+   You should see:
+   ```
+   agent-task-planner: /path/to/.../env/bin/python -m agent_task_planner.server - ✓ Connected
+   ```
+
+   Inside Claude Code, use `/mcp` to check server status.
+
+5. **Start the Services**
 
    Terminal 1 (Web UI):
    ```bash
@@ -79,6 +126,16 @@ The main view shows tasks grouped by status:
 
 Tasks are sorted by priority (highest first) within each group.
 
+### Project Selector
+
+Use the project selector dropdown at the top of the page to:
+
+1. **Filter tasks by project**: Only see tasks for the selected project
+2. **Set context for new agents**: Agents launched will work in the project's directory
+3. **Create new projects**: Click "New Project" to add a project
+
+When no project is selected, all tasks are shown and agents require a manual working directory.
+
 ### Quick Add
 
 Use the form at the top to rapidly create tasks:
@@ -101,6 +158,62 @@ Click any task to view and edit details:
 - **Progress**: 0-100% (updated by agents)
 - **Assigned Agent**: ID of the agent working on it
 - **Result/Error**: Outcome information
+
+---
+
+## Project Management
+
+Projects allow you to organize tasks and agents by codebase or work area.
+
+### Creating Projects
+
+**Via Web UI:**
+1. Click the project dropdown at the top
+2. Click "New Project"
+3. Enter project name and file path
+4. Click "Create"
+
+**Via MCP Tools:**
+```
+project_create(name="My App", path="/Users/me/projects/my-app", description="Main application")
+```
+
+**Via Folder Scan:**
+```
+project_scan(base_path="/Users/me/projects")
+```
+This scans a directory and creates projects for each subdirectory that looks like a code project (has package.json, pyproject.toml, Cargo.toml, etc.).
+
+### Project Fields
+
+| Field | Description |
+|-------|-------------|
+| `name` | Display name for the project |
+| `path` | Absolute filesystem path to the project root |
+| `description` | Optional notes about the project |
+| `is_active` | Whether the project is shown in selectors |
+| `settings` | JSON object for custom project settings |
+
+### Filtering by Project
+
+When a project is selected:
+- **Task list**: Only shows tasks linked to that project
+- **Quick Add**: New tasks are automatically linked to the project
+- **Agent Panel**: Agents launch in the project's directory
+
+### Linking Tasks to Projects
+
+Tasks are linked to projects via `project_id`:
+
+```
+task_create(
+    title="Add login page",
+    project_id="uuid-of-project",
+    ...
+)
+```
+
+Tasks without a `project_id` are "global" and appear when no project filter is applied.
 
 ---
 
@@ -153,15 +266,61 @@ Agents should generally claim higher priority tasks first.
 
 ## Agent Orchestration
 
-### Launching Agents
+### Prerequisites
 
-From the Web UI's Agent Panel:
+Before launching agents, ensure:
+1. The MCP server is configured with `--scope user` (see step 4 in Getting Started)
+2. The Orchestrator is running: `cd orchestrator && python -m orchestrator.main`
+3. The Web UI is running: `cd web && npm run dev`
 
-1. Enter a prompt describing what the agent should do
-2. Optionally specify a working directory
-3. Click "Launch Agent"
+### Launching Agents from Web UI
 
-The agent starts in a subprocess and you can watch its output in real-time.
+From the Web UI's Agent Panel (http://localhost:4011):
+
+1. **Select a project** from the dropdown (or leave unselected for manual directory)
+2. Enter a prompt describing what the agent should do
+3. If no project selected, specify a working directory
+4. Click "Launch Agent"
+
+When a project is selected, the agent automatically runs in that project's directory. The agent starts in a subprocess and you can watch its output in real-time.
+
+### Example Prompts for Task-Working Agents
+
+**Check and work on tasks:**
+```
+Use the task_get_ready tool to find available tasks. Claim the highest priority one using task_claim, then complete the work and mark it done with task_complete.
+```
+
+**Process all ready tasks:**
+```
+List all ready tasks with task_get_ready. For each task, claim it, perform the work described in the title/description, and mark it complete. Continue until no ready tasks remain.
+```
+
+**Work on a specific task:**
+```
+Get task details for ID "abc-123" using task_get. If it's ready, claim it and complete the described work.
+```
+
+### Launching Agents via API
+
+You can also launch agents programmatically:
+
+```bash
+curl -X POST http://localhost:8080/api/agents \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-secret-api-key" \
+  -d '{
+    "prompt": "Use task_get_ready to find tasks and work on the highest priority one.",
+    "working_dir": "/path/to/project"
+  }'
+```
+
+### How Agent-Task Integration Works
+
+1. **Agent spawns** → Orchestrator runs `claude -p "prompt" --dangerously-skip-permissions`
+2. **Agent connects to MCP** → Because MCP is configured with user scope, the agent has access to task tools
+3. **Agent uses task tools** → `task_get_ready`, `task_claim`, `task_update_progress`, `task_complete`
+4. **Task updates sync** → Changes appear in real-time in the Web UI via Supabase subscriptions
 
 ### Agent Lifecycle
 
@@ -187,6 +346,69 @@ When you select an agent, its output streams live via WebSocket. You'll see:
 
 ---
 
+## Remote Access via Tailscale
+
+Tailscale allows you to securely access the orchestrator and web UI from anywhere (phone, laptop, etc.) without exposing ports to the public internet.
+
+### Setup
+
+1. **Install Tailscale** on your Mac:
+   ```bash
+   brew install tailscale
+   sudo tailscaled
+   tailscale up
+   ```
+
+2. **Get your Tailscale IP**:
+   ```bash
+   tailscale ip -4
+   ```
+   This gives you an IP like `100.x.y.z`
+
+3. **Configure the Orchestrator**:
+
+   In your `.env` file:
+   ```
+   TAILSCALE_IP=100.x.y.z
+   ORCHESTRATOR_HOST=0.0.0.0
+   ORCHESTRATOR_PORT=8080
+   ```
+
+4. **Configure the Web UI**:
+
+   In `web/.env`:
+   ```
+   VITE_ORCHESTRATOR_URL=http://100.x.y.z:8080
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-key
+   ```
+
+5. **Access from another device**:
+
+   Install Tailscale on your phone or other computer, join the same Tailnet, then:
+   - Web UI: `http://100.x.y.z:4011`
+   - Orchestrator API: `http://100.x.y.z:8080`
+
+### Security Notes
+
+- **Tailscale encryption**: All traffic is encrypted end-to-end
+- **No public exposure**: Ports are only accessible within your Tailnet
+- **API key required**: The orchestrator still requires `X-API-Key` header
+- **Supabase RLS**: Database access is protected by row-level security
+
+### Mobile Workflow Example
+
+1. Open Safari on iPhone
+2. Go to `http://100.x.y.z:4011`
+3. Select a project
+4. Enter a prompt: "Fix the bug in the login form"
+5. Click "Launch Agent"
+6. Watch the agent work in real-time
+
+The agent runs on your Mac, but you control it from anywhere.
+
+---
+
 ## Using MCP Tools
 
 When working in Claude Code with the MCP server configured, these tools are available:
@@ -194,9 +416,9 @@ When working in Claude Code with the MCP server configured, these tools are avai
 ### Viewing Tasks
 
 ```
-task_list(status="ready", limit=10)
+task_list(status="ready", project_id="uuid", limit=10)
 ```
-List tasks with optional filters.
+List tasks with optional filters. Use `project_id` to filter by project.
 
 ```
 task_get(task_id="uuid-here")
@@ -204,9 +426,9 @@ task_get(task_id="uuid-here")
 Get full details including logs and subtasks.
 
 ```
-task_get_ready(limit=5)
+task_get_ready(project_id="uuid", limit=5)
 ```
-Get tasks ready to be claimed, ordered by priority.
+Get tasks ready to be claimed, ordered by priority. Filter by project if specified.
 
 ### Working on Tasks
 
@@ -236,6 +458,7 @@ Mark task as failed. If `retry=True` and retries remain, re-queues as ready.
 task_create(
     title="Implement login",
     description="Add OAuth login with Google",
+    project_id="uuid-of-project",
     priority=3,
     complexity="medium",
     depends_on=["prerequisite-uuid"],
@@ -256,6 +479,33 @@ task_add_subtask(
 ```
 task_add_note(task_id="uuid", agent_id="my-agent-id", note="Found a potential issue with the API")
 ```
+
+### Project Tools
+
+```
+project_list(active_only=True)
+```
+List all active projects.
+
+```
+project_get(project_id="uuid")
+```
+Get project details.
+
+```
+project_create(name="My App", path="/path/to/app", description="Optional description")
+```
+Create a new project.
+
+```
+project_update(project_id="uuid", name="New Name", is_active=False)
+```
+Update project details.
+
+```
+project_scan(base_path="/Users/me/projects")
+```
+Scan a folder and create projects for each recognized codebase.
 
 ---
 

@@ -6,13 +6,15 @@ interface TasksState {
   loading: boolean
   error: string | null
   selectedTaskId: string | null
+  projectFilter: string | null
 
   // Actions
-  fetchTasks: () => Promise<void>
-  addTask: (title: string, priority?: number, description?: string) => Promise<Task | null>
+  fetchTasks: (projectId?: string | null) => Promise<void>
+  addTask: (title: string, priority?: number, description?: string, projectId?: string | null) => Promise<Task | null>
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   selectTask: (id: string | null) => void
+  setProjectFilter: (projectId: string | null) => void
   subscribeToChanges: () => () => void
 }
 
@@ -21,15 +23,24 @@ export const useTasks = create<TasksState>((set, get) => ({
   loading: false,
   error: null,
   selectedTaskId: null,
+  projectFilter: null,
 
-  fetchTasks: async () => {
+  fetchTasks: async (projectId?: string | null) => {
     set({ loading: true, error: null })
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tasks')
-        .select('*')
+        .select('*, projects(id, name, path)')
         .order('priority', { ascending: false })
         .order('created_at', { ascending: false })
+
+      // Use provided projectId or current filter
+      const filterProjectId = projectId !== undefined ? projectId : get().projectFilter
+      if (filterProjectId) {
+        query = query.eq('project_id', filterProjectId)
+      }
+
+      const { data, error } = await query
 
       if (error) throw error
       set({ tasks: data || [], loading: false })
@@ -38,8 +49,11 @@ export const useTasks = create<TasksState>((set, get) => ({
     }
   },
 
-  addTask: async (title: string, priority = 0, description?: string) => {
+  addTask: async (title: string, priority = 0, description?: string, projectId?: string | null) => {
     try {
+      const currentProjectFilter = get().projectFilter
+      const taskProjectId = projectId !== undefined ? projectId : currentProjectFilter
+
       const { data, error } = await supabase
         .from('tasks')
         .insert({
@@ -47,8 +61,9 @@ export const useTasks = create<TasksState>((set, get) => ({
           priority,
           description,
           status: 'ready' as TaskStatus,
+          project_id: taskProjectId,
         })
-        .select()
+        .select('*, projects(id, name, path)')
         .single()
 
       if (error) throw error
@@ -105,6 +120,12 @@ export const useTasks = create<TasksState>((set, get) => ({
     set({ selectedTaskId: id })
   },
 
+  setProjectFilter: (projectId: string | null) => {
+    set({ projectFilter: projectId })
+    // Refetch tasks with new filter
+    get().fetchTasks(projectId)
+  },
+
   subscribeToChanges: () => {
     const channel = supabase
       .channel('tasks-changes')
@@ -113,15 +134,22 @@ export const useTasks = create<TasksState>((set, get) => ({
         { event: '*', schema: 'public', table: 'tasks' },
         (payload) => {
           const { eventType, new: newRecord, old: oldRecord } = payload
+          const projectFilter = get().projectFilter
 
           set((state) => {
             switch (eventType) {
-              case 'INSERT':
-                // Check if task already exists (we may have added it optimistically)
-                if (state.tasks.some((t) => t.id === (newRecord as Task).id)) {
+              case 'INSERT': {
+                const newTask = newRecord as Task
+                // Only add if matches current project filter
+                if (projectFilter && newTask.project_id !== projectFilter) {
                   return state
                 }
-                return { tasks: [newRecord as Task, ...state.tasks] }
+                // Check if task already exists (we may have added it optimistically)
+                if (state.tasks.some((t) => t.id === newTask.id)) {
+                  return state
+                }
+                return { tasks: [newTask, ...state.tasks] }
+              }
 
               case 'UPDATE':
                 return {

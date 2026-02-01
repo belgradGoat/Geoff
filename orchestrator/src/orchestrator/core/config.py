@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     max_agents: int = 10
     agent_timeout: int = 3600  # 1 hour default timeout
 
+    # Supabase Configuration (for project lookups)
+    supabase_url: str = os.getenv("SUPABASE_URL", "")
+    supabase_service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+
+    # MCP Server Configuration (for spawned agents)
+    mcp_python_path: str = os.getenv("MCP_PYTHON_PATH", "")
+
     class Config:
         env_prefix = "ORCHESTRATOR_"
 

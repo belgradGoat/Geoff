@@ -15,10 +15,99 @@ from .tools import (
     get_task,
     list_tasks,
     update_progress,
+    # Project tools
+    list_projects,
+    get_project,
+    create_project,
+    update_project,
+    scan_projects_folder,
 )
 
 # Create the FastMCP server
 mcp = FastMCP("Agent Task Planner")
+
+
+# =============================================================================
+# Project Tools
+# =============================================================================
+
+
+@mcp.tool()
+def project_list(active_only: bool = True) -> dict:
+    """
+    List all projects.
+
+    Args:
+        active_only: If True, only return active projects
+    """
+    return list_projects(active_only=active_only)
+
+
+@mcp.tool()
+def project_get(project_id: str) -> dict:
+    """
+    Get a specific project by ID.
+
+    Args:
+        project_id: The UUID of the project
+    """
+    return get_project(project_id)
+
+
+@mcp.tool()
+def project_create(name: str, path: str, description: Optional[str] = None) -> dict:
+    """
+    Create a new project.
+
+    Args:
+        name: Project name (e.g., "MyApp")
+        path: Full path to project directory (e.g., "/Users/.../GitHub/MyApp")
+        description: Optional project description
+    """
+    return create_project(name=name, path=path, description=description)
+
+
+@mcp.tool()
+def project_update(
+    project_id: str,
+    name: Optional[str] = None,
+    path: Optional[str] = None,
+    description: Optional[str] = None,
+    is_active: Optional[bool] = None,
+) -> dict:
+    """
+    Update a project.
+
+    Args:
+        project_id: The UUID of the project
+        name: New project name
+        path: New project path
+        description: New description
+        is_active: Set active status
+    """
+    return update_project(
+        project_id=project_id,
+        name=name,
+        path=path,
+        description=description,
+        is_active=is_active,
+    )
+
+
+@mcp.tool()
+def project_scan(base_path: str) -> dict:
+    """
+    Scan a folder for projects (directories with .git, package.json, etc.).
+
+    Args:
+        base_path: The base folder to scan (e.g., "/Users/.../GitHub")
+    """
+    return scan_projects_folder(base_path)
+
+
+# =============================================================================
+# Task Tools
+# =============================================================================
 
 
 @mcp.tool()
@@ -26,6 +115,7 @@ def task_list(
     status: Optional[str] = None,
     assigned_agent: Optional[str] = None,
     parent_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     limit: int = 50,
 ) -> dict:
     """
@@ -35,15 +125,22 @@ def task_list(
         status: Filter by status (queued, ready, assigned, in_progress, done, failed, blocked)
         assigned_agent: Filter by assigned agent ID
         parent_id: Filter by parent task ID (for subtasks)
+        project_id: Filter by project ID
         limit: Maximum number of tasks to return (default 50)
     """
-    return list_tasks(status=status, assigned_agent=assigned_agent, parent_id=parent_id, limit=limit)
+    return list_tasks(
+        status=status,
+        assigned_agent=assigned_agent,
+        parent_id=parent_id,
+        project_id=project_id,
+        limit=limit,
+    )
 
 
 @mcp.tool()
 def task_get(task_id: str) -> dict:
     """
-    Get a specific task by ID with its logs and subtasks.
+    Get a specific task by ID with its logs, subtasks, and project info.
 
     Args:
         task_id: The UUID of the task
@@ -52,14 +149,15 @@ def task_get(task_id: str) -> dict:
 
 
 @mcp.tool()
-def task_get_ready(limit: int = 10) -> dict:
+def task_get_ready(project_id: Optional[str] = None, limit: int = 10) -> dict:
     """
     Get tasks that are ready to be claimed.
 
     Args:
+        project_id: Filter by project ID (optional)
         limit: Maximum number of tasks to return
     """
-    return get_ready_tasks(limit=limit)
+    return get_ready_tasks(project_id=project_id, limit=limit)
 
 
 @mcp.tool()
@@ -161,6 +259,7 @@ def task_create(
     tags: Optional[list[str]] = None,
     context: Optional[dict] = None,
     estimated_minutes: Optional[int] = None,
+    project_id: Optional[str] = None,
 ) -> dict:
     """
     Create a new task.
@@ -174,6 +273,7 @@ def task_create(
         tags: List of tags
         context: Additional context as JSON
         estimated_minutes: Estimated time to complete
+        project_id: Project ID to associate the task with
     """
     return create_task(
         title=title,
@@ -184,6 +284,7 @@ def task_create(
         tags=tags,
         context=context,
         estimated_minutes=estimated_minutes,
+        project_id=project_id,
     )
 
 

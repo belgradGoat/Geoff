@@ -10,7 +10,7 @@ interface AgentsState {
 
   // Actions
   fetchAgents: () => Promise<void>
-  launchAgent: (prompt: string, workingDir?: string) => Promise<Agent | null>
+  launchAgent: (prompt: string, workingDir?: string, projectId?: string) => Promise<Agent | null>
   stopAgent: (id: string) => Promise<void>
   selectAgent: (id: string | null) => void
   streamAgentOutput: (id: string) => () => void
@@ -33,9 +33,9 @@ export const useAgents = create<AgentsState>((set, get) => ({
     }
   },
 
-  launchAgent: async (prompt: string, workingDir?: string) => {
+  launchAgent: async (prompt: string, workingDir?: string, projectId?: string) => {
     try {
-      const agent = await orchestrator.launchAgent(prompt, workingDir)
+      const agent = await orchestrator.launchAgent(prompt, workingDir, projectId)
       set((state) => ({
         agents: [agent, ...state.agents],
         agentOutput: { ...state.agentOutput, [agent.id]: [] },

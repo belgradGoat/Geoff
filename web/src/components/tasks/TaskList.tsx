@@ -43,6 +43,11 @@ function TaskItem({ task, onSelect, isSelected }: TaskItemProps) {
       )}
 
       <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+        {task.projects && (
+          <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
+            {task.projects.name}
+          </span>
+        )}
         {task.priority > 0 && (
           <span className="flex items-center gap-1">
             P{task.priority}

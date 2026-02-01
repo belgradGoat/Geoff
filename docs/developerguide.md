@@ -223,6 +223,81 @@ Or via the entry point:
 agent-task-planner
 ```
 
+### Configuring Claude Code
+
+The MCP server must be registered with Claude Code CLI. **Use `--scope user`** so that agents spawned by the orchestrator can also access the MCP tools:
+
+```bash
+claude mcp add-json --scope user agent-task-planner '{
+  "type": "stdio",
+  "command": "/absolute/path/to/env/bin/python",
+  "args": ["-m", "agent_task_planner.server"],
+  "env": {
+    "SUPABASE_URL": "https://your-project.supabase.co",
+    "SUPABASE_SERVICE_KEY": "your-service-key"
+  }
+}'
+```
+
+**Critical requirements:**
+
+1. **Absolute Python path**: You must use the full path to the Python executable in your virtual environment. Using just `python` or `python3` will fail because Claude Code spawns a new shell without your virtual environment activated.
+
+2. **User scope**: The `--scope user` flag is essential for the orchestrator workflow. When the orchestrator spawns a Claude agent, that agent needs access to the MCP tools. User-scoped MCP servers are available to all Claude instances on the machine.
+
+To find your Python path:
+```bash
+source /path/to/env/bin/activate
+which python
+# Use this output as the "command" value
+```
+
+#### MCP Server Management Commands
+
+```bash
+# List all configured servers and their status
+claude mcp list
+
+# Get details for a specific server
+claude mcp get agent-task-planner
+
+# Remove a server
+claude mcp remove agent-task-planner
+
+# Check status inside Claude Code
+/mcp
+```
+
+#### Configuration Storage
+
+MCP configurations are stored in `~/.claude.json`. User-scoped servers appear in the top-level `mcpServers` object:
+
+```json
+{
+  "mcpServers": {
+    "agent-task-planner": {
+      "type": "stdio",
+      "command": "/path/to/env/bin/python",
+      "args": ["-m", "agent_task_planner.server"],
+      "env": {
+        "SUPABASE_URL": "...",
+        "SUPABASE_SERVICE_KEY": "..."
+      }
+    }
+  }
+}
+```
+
+#### Scopes
+
+| Scope | Flag | Use Case |
+|-------|------|----------|
+| Local | `--scope local` (default) | Personal development, single project |
+| Project | `--scope project` | Team sharing via `.mcp.json` |
+| **User** | `--scope user` | **Required for orchestrator** - available to all Claude instances |
+
+**For Agent Task Planner, always use `--scope user`** to ensure spawned agents can access task management tools.
+
 ---
 
 ## Orchestrator

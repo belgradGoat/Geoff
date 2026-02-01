@@ -60,8 +60,11 @@ Agent Task Planner consists of three main components:
 
 ### 2. Install Components
 
-**MCP Server:**
+**MCP Server (use a virtual environment):**
 ```bash
+cd /path/to/AgentTaskPlanner
+python3 -m venv env
+source env/bin/activate
 cd mcp-server
 pip install -e .
 ```
@@ -83,17 +86,33 @@ python -m orchestrator.main
 
 ### 3. Configure Claude Code
 
-Add to your Claude Code MCP settings:
-```json
-{
-  "mcpServers": {
-    "agent-task-planner": {
-      "command": "python",
-      "args": ["-m", "agent_task_planner.server"],
-      "cwd": "/path/to/AgentTaskPlanner/mcp-server"
-    }
+Register the MCP server with **user scope** (required for orchestrator-spawned agents):
+
+```bash
+claude mcp add-json --scope user agent-task-planner '{
+  "type": "stdio",
+  "command": "/path/to/AgentTaskPlanner/env/bin/python",
+  "args": ["-m", "agent_task_planner.server"],
+  "env": {
+    "SUPABASE_URL": "https://your-project.supabase.co",
+    "SUPABASE_SERVICE_KEY": "your-service-key"
   }
-}
+}'
+```
+
+**Important**: Use the full absolute path to your venv Python.
+
+Verify the connection:
+```bash
+claude mcp list
+# Should show: agent-task-planner: ... ✓ Connected
+```
+
+### 4. Launch an Agent
+
+Start orchestrator and web UI, then from the Agent Panel:
+```
+Use task_get_ready to find available tasks. Claim the highest priority one and complete it.
 ```
 
 ## Documentation

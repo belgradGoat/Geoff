@@ -6,10 +6,161 @@ from uuid import UUID
 from .db import get_db
 
 
+# =============================================================================
+# Project Functions
+# =============================================================================
+
+
+def list_projects(active_only: bool = True) -> dict:
+    """
+    List all projects.
+
+    Args:
+        active_only: If True, only return active projects
+
+    Returns:
+        List of projects
+    """
+    db = get_db()
+    query = db.table("projects").select("*")
+
+    if active_only:
+        query = query.eq("is_active", True)
+
+    result = query.order("name").execute()
+    return {"projects": result.data, "count": len(result.data)}
+
+
+def get_project(project_id: str) -> dict:
+    """
+    Get a specific project by ID.
+
+    Args:
+        project_id: The UUID of the project
+
+    Returns:
+        Project details
+    """
+    db = get_db()
+    result = db.table("projects").select("*").eq("id", project_id).single().execute()
+    return {"project": result.data}
+
+
+def create_project(
+    name: str,
+    path: str,
+    description: Optional[str] = None,
+) -> dict:
+    """
+    Create a new project.
+
+    Args:
+        name: Project name (e.g., "MyApp")
+        path: Full path to project directory (e.g., "/Users/.../GitHub/MyApp")
+        description: Optional project description
+
+    Returns:
+        Created project
+    """
+    db = get_db()
+
+    project_data = {
+        "name": name,
+        "path": path,
+        "description": description,
+        "is_active": True,
+    }
+
+    result = db.table("projects").insert(project_data).execute()
+    return {"success": True, "project": result.data[0]}
+
+
+def update_project(
+    project_id: str,
+    name: Optional[str] = None,
+    path: Optional[str] = None,
+    description: Optional[str] = None,
+    is_active: Optional[bool] = None,
+) -> dict:
+    """
+    Update a project.
+
+    Args:
+        project_id: The UUID of the project
+        name: New project name
+        path: New project path
+        description: New description
+        is_active: Set active status
+
+    Returns:
+        Updated project
+    """
+    db = get_db()
+
+    update_data = {}
+    if name is not None:
+        update_data["name"] = name
+    if path is not None:
+        update_data["path"] = path
+    if description is not None:
+        update_data["description"] = description
+    if is_active is not None:
+        update_data["is_active"] = is_active
+
+    if not update_data:
+        return {"success": False, "error": "No fields to update"}
+
+    result = db.table("projects").update(update_data).eq("id", project_id).execute()
+
+    if not result.data:
+        return {"success": False, "error": "Project not found"}
+
+    return {"success": True, "project": result.data[0]}
+
+
+def scan_projects_folder(base_path: str) -> dict:
+    """
+    Scan a folder for projects (directories containing .git or common project files).
+
+    Args:
+        base_path: The base folder to scan (e.g., "/Users/.../GitHub")
+
+    Returns:
+        List of discovered project paths
+    """
+    import os
+
+    discovered = []
+    project_indicators = [".git", "package.json", "pyproject.toml", "Cargo.toml", "go.mod", "pom.xml"]
+
+    try:
+        for item in os.listdir(base_path):
+            item_path = os.path.join(base_path, item)
+            if os.path.isdir(item_path) and not item.startswith("."):
+                # Check for project indicators
+                for indicator in project_indicators:
+                    if os.path.exists(os.path.join(item_path, indicator)):
+                        discovered.append({
+                            "name": item,
+                            "path": item_path,
+                        })
+                        break
+
+        return {"success": True, "projects": discovered, "count": len(discovered)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# =============================================================================
+# Task Functions
+# =============================================================================
+
+
 def list_tasks(
     status: Optional[str] = None,
     assigned_agent: Optional[str] = None,
     parent_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     limit: int = 50,
 ) -> dict:
     """
@@ -19,13 +170,14 @@ def list_tasks(
         status: Filter by status (queued, ready, assigned, in_progress, done, failed, blocked)
         assigned_agent: Filter by assigned agent ID
         parent_id: Filter by parent task ID (for subtasks)
+        project_id: Filter by project ID
         limit: Maximum number of tasks to return (default 50)
 
     Returns:
         List of tasks matching the filters
     """
     db = get_db()
-    query = db.table("tasks").select("*")
+    query = db.table("tasks").select("*, projects(id, name, path)")
 
     if status:
         query = query.eq("status", status)
@@ -33,6 +185,8 @@ def list_tasks(
         query = query.eq("assigned_agent", assigned_agent)
     if parent_id:
         query = query.eq("parent_id", parent_id)
+    if project_id:
+        query = query.eq("project_id", project_id)
 
     query = query.order("priority", desc=True).order("created_at", desc=True).limit(limit)
 
@@ -48,12 +202,12 @@ def get_task(task_id: str) -> dict:
         task_id: The UUID of the task
 
     Returns:
-        Task details including logs
+        Task details including logs, subtasks, and project info
     """
     db = get_db()
 
-    # Get the task
-    task_result = db.table("tasks").select("*").eq("id", task_id).single().execute()
+    # Get the task with project info
+    task_result = db.table("tasks").select("*, projects(id, name, path)").eq("id", task_id).single().execute()
 
     # Get task logs
     logs_result = (
@@ -81,22 +235,30 @@ def get_task(task_id: str) -> dict:
     }
 
 
-def get_ready_tasks(limit: int = 10) -> dict:
+def get_ready_tasks(project_id: Optional[str] = None, limit: int = 10) -> dict:
     """
     Get tasks that are ready to be claimed (status='ready').
 
     Args:
+        project_id: Filter by project ID (optional)
         limit: Maximum number of tasks to return
 
     Returns:
-        List of ready tasks ordered by priority
+        List of ready tasks ordered by priority, with project info
     """
     db = get_db()
 
-    result = (
+    query = (
         db.table("tasks")
-        .select("*")
+        .select("*, projects(id, name, path)")
         .eq("status", "ready")
+    )
+
+    if project_id:
+        query = query.eq("project_id", project_id)
+
+    result = (
+        query
         .order("priority", desc=True)
         .order("created_at")
         .limit(limit)
@@ -372,6 +534,7 @@ def create_task(
     tags: Optional[list[str]] = None,
     context: Optional[dict] = None,
     estimated_minutes: Optional[int] = None,
+    project_id: Optional[str] = None,
 ) -> dict:
     """
     Create a new task.
@@ -385,6 +548,7 @@ def create_task(
         tags: List of tags
         context: Additional context as JSON
         estimated_minutes: Estimated time to complete
+        project_id: Project ID to associate the task with
 
     Returns:
         Created task
@@ -411,6 +575,7 @@ def create_task(
         "tags": tags or [],
         "context": context or {},
         "estimated_minutes": estimated_minutes,
+        "project_id": project_id,
     }
 
     result = db.table("tasks").insert(task_data).execute()
