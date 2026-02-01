@@ -256,6 +256,63 @@ async def get_quick_paths(
     return QuickPathsResponse(paths=paths)
 
 
+class CreateDirectoryRequest(BaseModel):
+    """Request for creating a new directory."""
+    parent_path: str
+    name: str
+
+
+class CreateDirectoryResponse(BaseModel):
+    """Response for creating a directory."""
+    path: str
+    name: str
+    created: bool
+
+
+@router.post("/create-directory", response_model=CreateDirectoryResponse)
+async def create_directory(
+    request: CreateDirectoryRequest,
+    _: str = Depends(verify_api_key),
+) -> CreateDirectoryResponse:
+    """Create a new directory."""
+    parent = Path(os.path.expanduser(request.parent_path))
+
+    if not parent.exists():
+        raise HTTPException(status_code=404, detail=f"Parent path not found: {parent}")
+
+    if not parent.is_dir():
+        raise HTTPException(status_code=400, detail=f"Parent path is not a directory: {parent}")
+
+    # Validate directory name
+    name = request.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Directory name cannot be empty")
+
+    # Check for invalid characters
+    invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+    for char in invalid_chars:
+        if char in name:
+            raise HTTPException(status_code=400, detail=f"Directory name contains invalid character: {char}")
+
+    new_path = parent / name
+
+    if new_path.exists():
+        raise HTTPException(status_code=409, detail=f"Directory already exists: {new_path}")
+
+    try:
+        new_path.mkdir(parents=False, exist_ok=False)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Permission denied to create directory in: {parent}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create directory: {e}")
+
+    return CreateDirectoryResponse(
+        path=str(new_path),
+        name=name,
+        created=True,
+    )
+
+
 class SystemInfoResponse(BaseModel):
     """System information for remote access."""
     hostname: str

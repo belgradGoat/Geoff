@@ -1,18 +1,20 @@
-# User Guide
+# Geoff User Guide
 
-This guide covers how to use Agent Task Planner for managing tasks and orchestrating Claude agents.
+This guide covers how to use Geoff for managing tasks and orchestrating Claude agents.
 
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Using the Web UI](#using-the-web-ui)
-3. [File Browser](#file-browser)
-4. [Project Management](#project-management)
-5. [Task Management](#task-management)
-6. [Agent Orchestration](#agent-orchestration)
-7. [Remote Access via Tailscale](#remote-access-via-tailscale)
-8. [Using MCP Tools](#using-mcp-tools)
-9. [Tips and Best Practices](#tips-and-best-practices)
+2. [Platform-Specific Setup](#platform-specific-setup)
+3. [Using the Web UI](#using-the-web-ui)
+4. [File Browser](#file-browser)
+5. [Project Management](#project-management)
+6. [Task Management](#task-management)
+7. [Agent Orchestration](#agent-orchestration)
+8. [Remote Access via Tailscale](#remote-access-via-tailscale)
+9. [Using MCP Tools](#using-mcp-tools)
+10. [Troubleshooting](#troubleshooting)
+11. [Tips and Best Practices](#tips-and-best-practices)
 
 ---
 
@@ -42,6 +44,14 @@ This guide covers how to use Agent Task Planner for managing tasks and orchestra
    | `SUPABASE_ANON_KEY` | Public anon key for client access |
    | `SUPABASE_SERVICE_KEY` | Service key for MCP server (bypasses RLS) |
    | `ORCHESTRATOR_API_KEY` | Secret key for orchestrator API auth |
+
+   Optional variables:
+   | Variable | Description | Default |
+   |----------|-------------|---------|
+   | `ORCHESTRATOR_CLAUDE_COMMAND` | Path to Claude CLI executable | `claude` |
+   | `ORCHESTRATOR_HOST` | Host to bind the orchestrator | `0.0.0.0` |
+   | `ORCHESTRATOR_PORT` | Port for the orchestrator | `8080` |
+   | `TAILSCALE_IP` | Your Tailscale IP for remote access | (auto-detected) |
 
 2. **Run Database Migrations**
 
@@ -104,8 +114,79 @@ This guide covers how to use Agent Task Planner for managing tasks and orchestra
 
    Terminal 2 (Orchestrator):
    ```bash
-   cd orchestrator && python -m orchestrator.main
+   cd orchestrator && uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
    ```
+
+---
+
+## Platform-Specific Setup
+
+### macOS
+
+macOS is the primary development platform. Follow the standard setup above.
+
+**Claude CLI**: Install via the official installer or Homebrew if available.
+
+**Tailscale**:
+```bash
+brew install tailscale
+sudo tailscaled
+tailscale up
+```
+
+### Windows
+
+Geoff works on Windows with a few configuration adjustments.
+
+**1. Install Prerequisites**
+- Python 3.11+ from python.org or Microsoft Store
+- Node.js 18+ from nodejs.org
+- Git for Windows
+- Claude CLI (install from official Anthropic installer)
+
+**2. Install uv (Python package manager)**
+```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**3. Configure Claude CLI Path**
+
+If Claude CLI is not in your PATH, add to your `.env`:
+```
+ORCHESTRATOR_CLAUDE_COMMAND=C:\Users\YourName\AppData\Local\Programs\claude\claude.exe
+```
+
+Or add Claude to your system PATH.
+
+**4. Install Tailscale**
+
+Download from https://tailscale.com/download/windows and run the installer.
+
+**5. Start Services**
+
+PowerShell Terminal 1 (Web UI):
+```powershell
+cd web
+npm run dev
+```
+
+PowerShell Terminal 2 (Orchestrator):
+```powershell
+cd orchestrator
+uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
+```
+
+### Linux
+
+Linux setup is similar to macOS.
+
+**Claude CLI**: Follow Anthropic's Linux installation instructions.
+
+**Tailscale**:
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
 
 ---
 
@@ -183,6 +264,17 @@ The **Files** tab provides a full filesystem browser that works locally and remo
 - **Quick access**: Buttons for Home, Documents, GitHub, Desktop, etc.
 - **Show hidden files**: Toggle to see dotfiles and hidden directories
 - **File information**: Size, modification date, file type icons
+- **Create folders**: Create new project folders directly from the browser
+
+### Creating New Project Folders
+
+1. Navigate to the parent directory where you want to create the project
+2. Click the **"+ New Folder"** button in the header
+3. Enter the folder name
+4. Check **"Register as project in Geoff"** to automatically add it to your projects list
+5. Click **Create** or press Enter
+
+The new folder appears immediately and is registered as a project if selected.
 
 ### Supported File Types
 
@@ -215,10 +307,21 @@ Projects allow you to organize tasks and agents by codebase or work area.
 
 ### Creating Projects
 
-**Via Web UI (Folder Scan - Recommended):**
+**Option 1: Create New Project Folder (Files Tab)**
+1. Go to the **Files** tab
+2. Navigate to where you want to create the project (e.g., Documents/GitHub)
+3. Click **"+ New Folder"**
+4. Enter the project name
+5. Keep **"Register as project in Geoff"** checked
+6. Click **Create**
+
+This creates the folder AND registers it as a project in one step.
+
+**Option 2: Import Existing Projects (Folder Scan)**
 1. Click **"Scan Folder"** in the Project section
 2. Paste your projects folder path (e.g., `/Users/you/Documents/GitHub`)
    - Tip: In Finder, right-click folder → "Copy as Pathname"
+   - Tip: On Windows, hold Shift + right-click → "Copy as path"
 3. Click **"Scan"**
 4. The system finds all code projects (directories with `package.json`, `pyproject.toml`, `.git`, etc.)
 5. Click **"Import All"** or import projects individually
@@ -590,6 +693,136 @@ Update project details.
 project_scan(base_path="/Users/me/projects")
 ```
 Scan a folder and create projects for each recognized codebase.
+
+---
+
+## Troubleshooting
+
+### Firewall Issues (Remote Access Not Working)
+
+If you can't connect to the Web UI or Orchestrator from another device on your Tailscale network:
+
+#### Symptoms
+- Browser shows "Connection refused" or "ERR_CONNECTION_CLOSED"
+- `curl` to the Tailscale IP times out
+- Services work on `localhost` but not on Tailscale IP
+
+#### Solution 1: Check Firewall Settings
+
+**macOS**:
+1. Go to **System Settings → Network → Firewall**
+2. Either:
+   - Turn off the firewall temporarily to test, OR
+   - Click **Options** and add exceptions for:
+     - `node` (for the Web UI)
+     - `python` or `uvicorn` (for the Orchestrator)
+
+**Windows**:
+1. Open **Windows Security → Firewall & network protection**
+2. Click **Allow an app through firewall**
+3. Add exceptions for:
+   - `node.exe`
+   - `python.exe` or `uvicorn.exe`
+4. Make sure both **Private** and **Public** are checked
+
+**Linux**:
+```bash
+# Allow ports through ufw
+sudo ufw allow 4011/tcp  # Web UI
+sudo ufw allow 8080/tcp  # Orchestrator
+
+# Or through firewalld
+sudo firewall-cmd --add-port=4011/tcp --permanent
+sudo firewall-cmd --add-port=8080/tcp --permanent
+sudo firewall-cmd --reload
+```
+
+#### Solution 2: Verify Services are Listening on All Interfaces
+
+Make sure services bind to `0.0.0.0` (all interfaces), not just `127.0.0.1` (localhost):
+
+**Web UI** (`vite.config.ts`):
+```typescript
+server: {
+  port: 4011,
+  host: true,  // This is critical - binds to 0.0.0.0
+}
+```
+
+**Orchestrator**:
+```bash
+uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
+```
+
+#### Solution 3: Check Tailscale Status
+
+Verify both devices are connected to the same Tailnet:
+```bash
+tailscale status
+```
+
+You should see both devices listed and online.
+
+#### Solution 4: Test Connectivity
+
+From the remote device:
+```bash
+# Test basic connectivity
+ping 100.x.y.z
+
+# Test if port is open
+curl -v http://100.x.y.z:8080/health
+```
+
+### Common Errors
+
+#### "404 Not Found" on API Endpoints
+
+The orchestrator needs to be restarted after code changes:
+```bash
+# Stop the orchestrator (Ctrl+C) and restart
+uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080 --reload
+```
+
+The `--reload` flag auto-restarts on file changes.
+
+#### "WebSocket connection failed"
+
+1. Check the orchestrator is running
+2. Verify `VITE_ORCHESTRATOR_URL` in `web/.env` is correct
+3. If using Tailscale, use `http://` not `https://`
+
+#### "SSL Protocol Error" or "HTTPS Required"
+
+Geoff uses HTTP, not HTTPS. Make sure URLs start with `http://`:
+- Correct: `http://100.x.y.z:4011`
+- Wrong: `https://100.x.y.z:4011`
+
+Tailscale already encrypts all traffic, so HTTPS is not needed.
+
+#### "Could not find relationship between 'tasks' and 'projects'"
+
+Run the `004_projects.sql` migration in your Supabase SQL Editor.
+
+#### "Agent failed to start" or "claude: command not found"
+
+1. Verify Claude CLI is installed: `claude --version`
+2. If not in PATH, set the full path in `.env`:
+   ```
+   ORCHESTRATOR_CLAUDE_COMMAND=/full/path/to/claude
+   ```
+
+#### MCP Server Not Connecting
+
+1. Check MCP is configured with user scope:
+   ```bash
+   claude mcp list
+   ```
+2. Verify the Python path in MCP config points to your virtual environment
+3. Test the MCP server directly:
+   ```bash
+   /path/to/env/bin/python -m agent_task_planner.server
+   ```
 
 ---
 

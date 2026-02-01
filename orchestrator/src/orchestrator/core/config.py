@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     tailscale_ip: str | None = os.getenv("TAILSCALE_IP")
 
     # Claude CLI Configuration
-    claude_command: str = "claude"
+    claude_command: str = os.getenv("ORCHESTRATOR_CLAUDE_COMMAND", "claude")
     default_working_dir: str = os.path.expanduser("~")
 
     # Agent Configuration

@@ -3,6 +3,10 @@
 .env.local
 .env.*.local
 
+# Private planning docs
+docs/ExpansionPlan.md
+docs/BusinessPlan.md
+
 # Python
 __pycache__/
 *.py[cod]

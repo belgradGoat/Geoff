@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { orchestrator, FileEntry, FileContentResponse } from '../../lib/orchestrator'
+import { useProjects } from '../../hooks/useProjects'
 
 function formatSize(bytes?: number): string {
   if (bytes === undefined) return ''
@@ -103,6 +104,15 @@ export function FileBrowser() {
   const [fileLoading, setFileLoading] = useState(false)
   const [stats, setStats] = useState({ files: 0, dirs: 0 })
 
+  // Create folder state
+  const [showCreateFolder, setShowCreateFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [registerAsProject, setRegisterAsProject] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
+  const { fetchProjects } = useProjects()
+
   useEffect(() => {
     loadQuickPaths()
     browse(undefined)
@@ -154,22 +164,124 @@ export function FileBrowser() {
     setTimeout(() => browse(currentPath), 0)
   }
 
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim() || !currentPath) return
+
+    setCreating(true)
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      const result = await orchestrator.createDirectory(currentPath, newFolderName.trim())
+
+      if (registerAsProject) {
+        await orchestrator.createProject(newFolderName.trim(), result.path)
+        await fetchProjects()
+        setSuccessMessage(`Created project folder "${newFolderName.trim()}"`)
+      } else {
+        setSuccessMessage(`Created folder "${newFolderName.trim()}"`)
+      }
+
+      // Reset form and refresh
+      setNewFolderName('')
+      setShowCreateFolder(false)
+      await browse(currentPath)
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const openCreateFolder = () => {
+    setShowCreateFolder(true)
+    setError(null)
+    setTimeout(() => folderInputRef.current?.focus(), 100)
+  }
+
   return (
     <div className="card flex flex-col h-[600px]">
       {/* Header */}
       <div className="p-4 border-b border-geoff-border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-geoff-text">File Browser</h2>
-          <label className="flex items-center gap-2 text-sm text-geoff-text-muted cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showHidden}
-              onChange={toggleHidden}
-              className="rounded border-geoff-border bg-geoff-surface"
-            />
-            Show hidden
-          </label>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={openCreateFolder}
+              className="flex items-center gap-1 text-sm text-geoff-success hover:text-geoff-success/80 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              New Folder
+            </button>
+            <label className="flex items-center gap-2 text-sm text-geoff-text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showHidden}
+                onChange={toggleHidden}
+                className="rounded border-geoff-border bg-geoff-surface"
+              />
+              Show hidden
+            </label>
+          </div>
         </div>
+
+        {/* Create folder form */}
+        {showCreateFolder && (
+          <div className="mb-3 p-3 bg-geoff-surface rounded-lg border border-geoff-border">
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                ref={folderInputRef}
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateFolder()
+                  if (e.key === 'Escape') {
+                    setShowCreateFolder(false)
+                    setNewFolderName('')
+                  }
+                }}
+                placeholder="Folder name..."
+                className="input flex-1 text-sm"
+              />
+              <button
+                onClick={handleCreateFolder}
+                disabled={creating || !newFolderName.trim()}
+                className="btn-primary text-sm whitespace-nowrap"
+              >
+                {creating ? 'Creating...' : 'Create'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreateFolder(false)
+                  setNewFolderName('')
+                }}
+                className="p-2 text-geoff-text-dim hover:text-geoff-text transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-geoff-text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={registerAsProject}
+                onChange={(e) => setRegisterAsProject(e.target.checked)}
+                className="rounded border-geoff-border bg-geoff-surface"
+              />
+              Register as project in Geoff
+            </label>
+            <p className="mt-1 text-xs text-geoff-text-dim">
+              Creating in: <span className="font-mono">{currentPath}</span>
+            </p>
+          </div>
+        )}
 
         {/* Quick paths */}
         {quickPaths.length > 0 && (
@@ -211,6 +323,13 @@ export function FileBrowser() {
           </span>
         </div>
       </div>
+
+      {/* Success message */}
+      {successMessage && (
+        <div className="px-4 py-2 bg-geoff-success-dim text-geoff-success text-sm border-b border-geoff-success/30">
+          {successMessage}
+        </div>
+      )}
 
       {/* Error */}
       {error && (
