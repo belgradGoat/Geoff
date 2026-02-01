@@ -29,45 +29,54 @@ function App() {
   const selectedProject = useProjects.getState().projects.find(p => p.id === projectFilter)
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-sm border-b border-gray-200">
+    <div className="min-h-screen bg-geoff-bg">
+      {/* Header */}
+      <header className="bg-geoff-surface border-b border-geoff-border sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Agent Task Planner</h1>
-              {selectedProject && (
-                <p className="text-sm text-gray-500">{selectedProject.name}</p>
-              )}
+            <div className="flex items-center gap-4">
+              {/* Logo */}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-geoff-accent flex items-center justify-center">
+                  <span className="text-white font-bold text-xl">G</span>
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-geoff-text">Geoff</h1>
+                  {selectedProject && (
+                    <p className="text-xs text-geoff-text-muted">{selectedProject.name}</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Tab navigation */}
-            <nav className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+            <nav className="flex gap-1 bg-geoff-card p-1 rounded-xl border border-geoff-border">
               <button
                 onClick={() => setActiveTab('tasks')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
                   activeTab === 'tasks'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-geoff-accent text-white'
+                    : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
                 }`}
               >
                 Tasks
               </button>
               <button
                 onClick={() => setActiveTab('files')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
                   activeTab === 'files'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-geoff-accent text-white'
+                    : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
                 }`}
               >
                 Files
               </button>
               <button
                 onClick={() => setActiveTab('settings')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
                   activeTab === 'settings'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-geoff-accent text-white'
+                    : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
                 }`}
               >
                 Settings

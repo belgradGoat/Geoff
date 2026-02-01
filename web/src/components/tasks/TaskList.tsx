@@ -2,14 +2,22 @@ import { Task, TaskStatus } from '../../lib/supabase'
 import { useTasks, groupTasksByStatus } from '../../hooks/useTasks'
 
 const statusConfig: Record<TaskStatus, { label: string; color: string; bg: string }> = {
-  queued: { label: 'Queued', color: 'text-gray-600', bg: 'bg-gray-100' },
-  ready: { label: 'Ready', color: 'text-blue-600', bg: 'bg-blue-100' },
-  assigned: { label: 'Assigned', color: 'text-purple-600', bg: 'bg-purple-100' },
-  in_progress: { label: 'In Progress', color: 'text-yellow-600', bg: 'bg-yellow-100' },
-  done: { label: 'Done', color: 'text-green-600', bg: 'bg-green-100' },
-  failed: { label: 'Failed', color: 'text-red-600', bg: 'bg-red-100' },
-  blocked: { label: 'Blocked', color: 'text-orange-600', bg: 'bg-orange-100' },
+  queued: { label: 'Queued', color: 'text-geoff-text-muted', bg: 'bg-geoff-card' },
+  ready: { label: 'Ready', color: 'text-geoff-accent', bg: 'bg-geoff-accent-dim' },
+  assigned: { label: 'Assigned', color: 'text-geoff-purple', bg: 'bg-geoff-purple-dim' },
+  in_progress: { label: 'In Progress', color: 'text-geoff-warning', bg: 'bg-geoff-warning-dim' },
+  done: { label: 'Done', color: 'text-geoff-success', bg: 'bg-geoff-success-dim' },
+  failed: { label: 'Failed', color: 'text-geoff-error', bg: 'bg-geoff-error-dim' },
+  blocked: { label: 'Blocked', color: 'text-orange-400', bg: 'bg-orange-500/10' },
 }
+
+const priorityBorders = [
+  'border-l-geoff-text-dim',
+  'border-l-geoff-accent',
+  'border-l-geoff-warning',
+  'border-l-orange-500',
+  'border-l-geoff-error',
+]
 
 const statusOrder: TaskStatus[] = ['in_progress', 'assigned', 'ready', 'queued', 'blocked', 'done', 'failed']
 
@@ -21,54 +29,49 @@ interface TaskItemProps {
 
 function TaskItem({ task, onSelect, isSelected }: TaskItemProps) {
   const config = statusConfig[task.status]
+  const borderColor = priorityBorders[task.priority] || priorityBorders[0]
 
   return (
     <div
       onClick={onSelect}
-      className={`p-3 rounded-lg cursor-pointer border transition-colors ${
+      className={`p-3 rounded-lg cursor-pointer border-l-4 ${borderColor} transition-all ${
         isSelected
-          ? 'border-blue-500 bg-blue-50'
-          : 'border-gray-200 bg-white hover:border-gray-300'
+          ? 'bg-geoff-accent-dim border border-geoff-accent'
+          : 'bg-geoff-surface border border-geoff-border hover:border-geoff-border-light'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-medium text-gray-900 flex-1">{task.title}</h3>
+        <h3 className="font-medium text-geoff-text flex-1">{task.title}</h3>
         <span className={`px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.color}`}>
           {config.label}
         </span>
       </div>
 
       {task.description && (
-        <p className="text-sm text-gray-500 mt-1 line-clamp-2">{task.description}</p>
+        <p className="text-sm text-geoff-text-muted mt-1 line-clamp-2">{task.description}</p>
       )}
 
-      <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+      <div className="flex items-center gap-3 mt-2 text-xs text-geoff-text-dim">
         {task.projects && (
-          <span className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
+          <span className="px-1.5 py-0.5 bg-geoff-card rounded border border-geoff-border">
             {task.projects.name}
           </span>
         )}
         {task.priority > 0 && (
-          <span className="flex items-center gap-1">
-            P{task.priority}
-          </span>
+          <span>P{task.priority}</span>
         )}
         {task.assigned_agent && (
-          <span className="flex items-center gap-1">
-            Agent: {task.assigned_agent.slice(0, 8)}
-          </span>
+          <span className="font-mono">Agent: {task.assigned_agent.slice(0, 8)}</span>
         )}
         {task.progress > 0 && task.status === 'in_progress' && (
-          <span className="flex items-center gap-1">
-            {task.progress}%
-          </span>
+          <span>{task.progress}%</span>
         )}
       </div>
 
       {task.progress > 0 && task.status === 'in_progress' && (
-        <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+        <div className="mt-2 h-1 bg-geoff-border rounded-full overflow-hidden">
           <div
-            className="h-full bg-blue-500 transition-all"
+            className="h-full bg-geoff-accent transition-all"
             style={{ width: `${task.progress}%` }}
           />
         </div>
@@ -117,7 +120,7 @@ export function TaskList() {
 
   if (loading && tasks.length === 0) {
     return (
-      <div className="flex items-center justify-center h-48 text-gray-500">
+      <div className="card p-8 text-center text-geoff-text-muted">
         Loading tasks...
       </div>
     )
@@ -125,7 +128,7 @@ export function TaskList() {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-600">
+      <div className="card p-4 bg-geoff-error-dim border-geoff-error text-geoff-error">
         Error: {error}
       </div>
     )
@@ -133,15 +136,15 @@ export function TaskList() {
 
   if (tasks.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+      <div className="card p-8 text-center text-geoff-text-muted">
         <p>No tasks yet</p>
-        <p className="text-sm">Add a task using the form above</p>
+        <p className="text-sm mt-1">Add a task using the form above</p>
       </div>
     )
   }
 
   return (
-    <div>
+    <div className="card p-4">
       {statusOrder.map((status) => (
         <TaskColumn
           key={status}

@@ -2,6 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-100 text-gray-900;
+@layer base {
+  body {
+    @apply bg-geoff-bg text-geoff-text font-sans antialiased;
+  }
+
+  /* Custom scrollbar for dark theme */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-geoff-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-geoff-border-light rounded;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-geoff-text-dim;
+  }
+
+  /* Form elements */
+  input, textarea, select {
+    @apply bg-geoff-surface border-geoff-border text-geoff-text;
+  }
+
+  input::placeholder, textarea::placeholder {
+    @apply text-geoff-text-dim;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    @apply border-geoff-accent ring-1 ring-geoff-accent outline-none;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-geoff-accent text-white rounded-lg font-medium
+           hover:bg-geoff-accent-hover transition-colors
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-geoff-card border border-geoff-border text-geoff-text rounded-lg font-medium
+           hover:bg-geoff-surface hover:border-geoff-border-light transition-colors
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply px-4 py-2 text-geoff-text-muted rounded-lg font-medium
+           hover:bg-geoff-card hover:text-geoff-text transition-colors;
+  }
+
+  .card {
+    @apply bg-geoff-card border border-geoff-border rounded-xl;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 bg-geoff-surface border border-geoff-border rounded-lg
+           text-geoff-text placeholder-geoff-text-dim
+           focus:border-geoff-accent focus:ring-1 focus:ring-geoff-accent focus:outline-none
+           transition-colors;
+  }
 }
