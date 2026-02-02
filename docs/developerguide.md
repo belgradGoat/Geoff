@@ -350,7 +350,32 @@ orchestrator/
     └── core/
         ├── config.py        # Settings management
         ├── security.py      # API key middleware
+        ├── providers.py     # Multi-provider abstraction
         └── agent_manager.py # Process management
+```
+
+### Provider Abstraction
+
+The orchestrator supports multiple AI CLI tools through a provider abstraction layer:
+
+| Provider | CLI Tool | Free Tier |
+|----------|----------|-----------|
+| `claude` | Claude Code CLI | Yes |
+| `codex` | OpenAI Codex CLI | Yes |
+| `gemini` | Google Gemini CLI | Yes |
+| `opencode` | OpenCode | Yes |
+
+Each provider implements the `Provider` interface with a `build_command()` method that constructs the appropriate CLI invocation:
+
+```python
+class Provider(ABC):
+    @abstractmethod
+    def build_command(self, prompt: str, working_dir: Optional[str] = None) -> list[str]:
+        pass
+
+class ClaudeProvider(Provider):
+    def build_command(self, prompt: str, working_dir: Optional[str] = None) -> list[str]:
+        return [self.config.command, "-p", prompt, "--dangerously-skip-permissions"]
 ```
 
 ### Agent Manager
@@ -361,12 +386,18 @@ The `AgentManager` class handles:
 2. **Output Capture**: Reads stdout/stderr asynchronously
 3. **Subscriber Pattern**: Multiple WebSocket clients can watch the same agent
 4. **Lifecycle Management**: Tracks status, PID, exit codes
+5. **Provider Support**: Uses provider registry to build correct CLI commands
 
 ```python
+# Get provider from registry
+registry = get_provider_registry()
+provider = registry.get_provider(ProviderType(agent.provider))
+
+# Build command using provider abstraction
+cmd = provider.build_command(agent.prompt, agent.working_dir)
+
 process = await asyncio.create_subprocess_exec(
-    "claude",
-    "-p", prompt,
-    "--dangerously-skip-permissions",
+    *cmd,
     cwd=working_dir,
     stdout=asyncio.subprocess.PIPE,
     stderr=asyncio.subprocess.STDOUT,
@@ -377,12 +408,13 @@ process = await asyncio.create_subprocess_exec(
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/agents` | Launch new agent |
+| POST | `/api/agents` | Launch new agent (accepts `provider` field) |
 | GET | `/api/agents` | List all agents |
 | GET | `/api/agents/:id` | Get agent details |
 | DELETE | `/api/agents/:id` | Stop agent |
 | GET | `/api/agents/:id/output` | Get buffered output |
 | WS | `/api/agents/:id/stream` | Live output stream |
+| GET | `/api/agents/providers` | List available providers |
 
 ### WebSocket Protocol
 
@@ -410,6 +442,23 @@ X-API-Key: your-secret-key
 WS /api/agents/:id/stream?api_key=your-secret-key
 ```
 
+### Provider Configuration
+
+Providers are configured via environment variables:
+
+```bash
+# Default provider when none specified
+ORCHESTRATOR_DEFAULT_PROVIDER=claude
+
+# Custom CLI paths (if not in PATH)
+ORCHESTRATOR_CLAUDE_COMMAND=claude
+ORCHESTRATOR_CODEX_COMMAND=codex
+ORCHESTRATOR_GEMINI_COMMAND=gemini
+ORCHESTRATOR_OPENCODE_COMMAND=opencode
+```
+
+The web UI stores the user's provider preference in `localStorage` under `geoff-provider`. When launching an agent without specifying a provider, this preference is used.
+
 ---
 
 ## Web UI
@@ -431,23 +480,35 @@ web/
 ├── vite.config.ts
 ├── tailwind.config.js
 ├── tsconfig.json
+├── public/
+│   ├── logo.png            # Geoff mascot logo
+│   ├── favicon.ico         # Browser favicon
+│   └── apple-touch-icon.png
 └── src/
     ├── main.tsx
     ├── App.tsx
     ├── index.css
     ├── lib/
     │   ├── supabase.ts      # Client + types
-    │   └── orchestrator.ts  # API client
+    │   └── orchestrator.ts  # API client (+ provider types)
     ├── hooks/
     │   ├── useTasks.ts      # Task state
-    │   └── useAgents.ts     # Agent state
+    │   ├── useAgents.ts     # Agent state (provider-aware)
+    │   └── useProjects.ts   # Project state
     └── components/
         ├── tasks/
         │   ├── QuickAdd.tsx
         │   ├── TaskList.tsx
         │   └── TaskDetail.tsx
-        └── agents/
-            └── AgentPanel.tsx
+        ├── agents/
+        │   └── AgentPanel.tsx
+        ├── files/
+        │   └── FileBrowser.tsx
+        ├── projects/
+        │   └── ProjectSelector.tsx
+        └── settings/
+            ├── ProviderSettings.tsx  # AI provider selector
+            └── RemoteAccess.tsx
 ```
 
 ### State Management
@@ -568,13 +629,50 @@ VITE_ORCHESTRATOR_API_KEY=secret
 
 2. Include router in `main.py` if new file
 
-### Custom Agent Launch Options
+### Adding a New AI Provider
 
-Modify `AgentManager._run_agent()` to customize:
-- Claude CLI flags
-- Environment variables
-- Working directory handling
-- Output processing
+1. Add the provider type to `ProviderType` enum in `providers.py`:
+   ```python
+   class ProviderType(str, Enum):
+       CLAUDE = "claude"
+       # Add your provider:
+       NEWPROVIDER = "newprovider"
+   ```
+
+2. Create a provider class:
+   ```python
+   class NewProviderProvider(Provider):
+       def build_command(self, prompt: str, working_dir: Optional[str] = None) -> list[str]:
+           cmd = [self.config.command]
+           cmd.extend([self.config.prompt_flag, prompt])
+           if self.config.auto_approve_flag:
+               cmd.append(self.config.auto_approve_flag)
+           return cmd
+   ```
+
+3. Register in the provider registry:
+   ```python
+   def get_provider_registry() -> ProviderRegistry:
+       registry = ProviderRegistry()
+       registry.register(ProviderType.NEWPROVIDER, NewProviderProvider(
+           ProviderConfig(
+               name="New Provider",
+               command="newprovider",
+               prompt_flag="--prompt",
+               auto_approve_flag="--yes",
+           )
+       ))
+       return registry
+   ```
+
+4. Add environment variable in `config.py`:
+   ```python
+   newprovider_command: str = os.getenv("ORCHESTRATOR_NEWPROVIDER_COMMAND", "newprovider")
+   ```
+
+5. Update the `get_provider_command()` method
+
+6. Add to `ProviderSettings.tsx` in the web UI
 
 ---
 
@@ -594,9 +692,17 @@ Modify `AgentManager._run_agent()` to customize:
 
 ### Agent Launch Fails
 
-1. Verify `claude` CLI is in PATH
+1. Verify the provider CLI is installed and in PATH:
+   - Claude: `claude --version`
+   - Codex: `codex --version`
+   - Gemini: `gemini --version`
+   - OpenCode: `opencode --version`
 2. Check orchestrator logs for subprocess errors
 3. Verify working directory exists and is accessible
+4. Check if custom CLI path is needed in `.env`:
+   ```bash
+   ORCHESTRATOR_CLAUDE_COMMAND=/path/to/claude
+   ```
 
 ### WebSocket Connection Issues
 
@@ -618,3 +724,5 @@ Modify `AgentManager._run_agent()` to customize:
 | "Maximum number of agents reached" | Too many concurrent agents | Stop unused agents |
 | "Missing SUPABASE_URL" | Environment not configured | Check .env file |
 | "Invalid API key" | Wrong orchestrator key | Check ORCHESTRATOR_API_KEY |
+| "Unknown provider: xyz" | Provider not registered | Use claude, codex, gemini, or opencode |
+| "Provider CLI not found" | CLI tool not in PATH | Install the CLI or set custom path in .env |

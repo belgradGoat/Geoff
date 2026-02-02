@@ -29,7 +29,12 @@ function AgentItem({ agent, isSelected, onSelect, onStop }: AgentItemProps) {
       }`}
     >
       <div className="flex items-center justify-between">
-        <span className="font-mono text-sm text-geoff-text">{agent.id.slice(0, 8)}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm text-geoff-text">{agent.id.slice(0, 8)}</span>
+          <span className="px-1.5 py-0.5 text-xs bg-geoff-card border border-geoff-border rounded text-geoff-text-muted">
+            {agent.provider || 'claude'}
+          </span>
+        </div>
         <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[agent.status]}`}>
           {agent.status}
         </span>

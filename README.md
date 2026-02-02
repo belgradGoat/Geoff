@@ -7,8 +7,11 @@
 You're on the train to work. You have an idea for your side project. You pull out your phone, open Geoff, and type:
 
 > "Add dark mode to the settings page"
+> "Create devlopment plan for the new feature"
+> "Implement development plan"
 
-You put your phone away and go to your meetings. When you get home, it's done.
+
+You put your phone away and go to your meetings. When you leave, it's done. You give your Agent next task on the way to lunch.
 
 That's Geoff.
 
@@ -16,44 +19,45 @@ That's Geoff.
 
 ## What is this?
 
-Geoff is a tool for hobby developers with day jobs. People who code on evenings and weekends. People who don't have 8 hours a day to sit in an IDE.
+Geoff is a tool to Vibe Code anywhere. People who have great ideas and want AI agents to work for them, while they focus on their life. People who don't have 8 hours a day to sit in an IDE.
 
 It lets you:
 - **Capture tasks from your phone** while you're away from your computer
 - **Launch AI agents** to work on those tasks
 - **Check progress remotely** and see what got done
 
-Your limited hobby time should be spent on the fun parts of coding, not boilerplate. Let AI handle the boring stuff while you're stuck in meetings.
+Your limited time should be spent on the product design and things you enjoy in life, not boilerplate. Let AI handle the boring stuff while you're stuck in meetings.
 
 ---
 
 ## How it works
 
 ```
-Phone (anywhere) → Geoff → Your Mac (at home) → Claude agents do the work
+Phone (anywhere) → Geoff → Your Computer (at home) → Agents do the work
          ↑                                              ↓
-         └──────────── See results when you get home ──┘
+         └─────- Verify on the phone and your machine ──┘
 ```
 
-1. **Your Mac runs the orchestrator** - A small Python server that can launch Claude Code agents
-2. **Tailscale connects everything** - Secure access to your Mac from anywhere, no port forwarding
+1. **Your machine runs the orchestrator** - A small Python server that can launch AI agents performing individual tasks
+2. **Tailscale connects everything** - Secure access to your machine from anywhere, no port forwarding
 3. **Tasks live in Supabase** - Free cloud database, syncs everywhere
 4. **Web UI works on mobile** - Create tasks, browse files, launch agents from your phone
+5. **Supports Claude Code, OpenAI Codex, Google Cli, OpenCode** - Wide list of providers
 
 ---
 
 ## The setup (one-time, ~30 minutes)
 
 You'll need:
-- A Mac (or Linux/Windows) that stays on
-- [Claude Code CLI](https://claude.ai/code) installed
+- A computer (Mac/Linux/Windows) that stays on
+- [Claude Code CLI](https://claude.ai/code) installed - or any other provider from the list
 - [Tailscale](https://tailscale.com) (free) for secure remote access
 - [Supabase](https://supabase.com) account (free tier works)
 
 ### 1. Clone and configure
 
 ```bash
-git clone <this-repo-url>
+git clone <https://github.com/belgradGoat/Geoff>
 cd AgentTaskPlanner
 cp .env.example .env
 # Edit .env with your Supabase credentials
@@ -190,10 +194,14 @@ This is a community project. If you're a hobby developer who wants to make this 
 
 ## License
 
-MIT - Do whatever you want with it.
+MIT - Do whatever you want with it. See [LICENSE.md](LICENSE.md) and [Trademarks.md](Trademarks.md).
 
 ---
 
 *Built by hobby developers, for hobby developers.*
 
-If Geoff saves you time, you can [buy me a coffee](https://github.com/sponsors/YOUR_USERNAME).
+<p align="center">
+  <a href="https://github.com/sponsors/belgradGoat">
+    <img src="https://img.shields.io/badge/Sponsor-♥-ea4aaa?style=flat-square" alt="Sponsor">
+  </a>
+</p>

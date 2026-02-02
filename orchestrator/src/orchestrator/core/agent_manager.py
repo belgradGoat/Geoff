@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Optional
 
 from .config import get_settings
+from .providers import ProviderType, get_provider_registry
 
 
 class AgentStatus(str, Enum):
@@ -26,6 +27,7 @@ class Agent:
     id: str
     prompt: str
     working_dir: str
+    provider: str = "claude"
     status: AgentStatus = AgentStatus.STARTING
     pid: Optional[int] = None
     started_at: datetime = field(default_factory=datetime.utcnow)
@@ -41,6 +43,7 @@ class Agent:
             "id": self.id,
             "prompt": self.prompt,
             "working_dir": self.working_dir,
+            "provider": self.provider,
             "status": self.status.value,
             "pid": self.pid,
             "started_at": self.started_at.isoformat(),
@@ -64,14 +67,16 @@ class AgentManager:
         prompt: str,
         working_dir: Optional[str] = None,
         agent_id: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> Agent:
         """
-        Launch a new Claude agent.
+        Launch a new agent with the specified provider.
 
         Args:
             prompt: The prompt/task for the agent
             working_dir: Working directory for the agent
             agent_id: Optional custom agent ID
+            provider: Provider to use (claude, codex, gemini, opencode)
 
         Returns:
             The created Agent instance
@@ -81,11 +86,13 @@ class AgentManager:
 
         agent_id = agent_id or str(uuid.uuid4())
         working_dir = working_dir or self.settings.default_working_dir
+        provider = provider or self.settings.default_provider
 
         agent = Agent(
             id=agent_id,
             prompt=prompt,
             working_dir=working_dir,
+            provider=provider,
         )
 
         self.agents[agent_id] = agent
@@ -99,12 +106,26 @@ class AgentManager:
     async def _run_agent(self, agent: Agent) -> None:
         """Run the agent process and capture output."""
         try:
+            # Get provider and build command
+            registry = get_provider_registry()
+            try:
+                provider_type = ProviderType(agent.provider)
+            except ValueError:
+                raise RuntimeError(f"Unknown provider: {agent.provider}")
+
+            provider = registry.get_provider(provider_type)
+
+            # Update command from settings if overridden
+            custom_command = self.settings.get_provider_command(agent.provider)
+            if custom_command:
+                provider.config.command = custom_command
+
+            # Build the command
+            cmd = provider.build_command(agent.prompt, agent.working_dir)
+
             # Create the subprocess
             process = await asyncio.create_subprocess_exec(
-                self.settings.claude_command,
-                "-p",
-                agent.prompt,
-                "--dangerously-skip-permissions",
+                *cmd,
                 cwd=agent.working_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,

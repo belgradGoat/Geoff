@@ -66,3 +66,4 @@ htmlcov/
 
 # Type checking
 .mypy_cache/
+docs/AgenticExpansionPlan.md

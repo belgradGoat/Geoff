@@ -508,6 +508,123 @@ When you select an agent, its output streams live via WebSocket. You'll see:
 
 ---
 
+## AI Providers
+
+Geoff supports multiple AI coding CLI tools. You can switch between them in the **Settings** tab.
+
+### Supported Providers
+
+| Provider | Description | Free Tier |
+|----------|-------------|-----------|
+| **Claude Code** | Anthropic's CLI - Best for complex reasoning (default) | No |
+| **OpenAI Codex** | OpenAI's CLI - Requires ChatGPT Plus ($20/mo) | No |
+| **Google Gemini** | Google's CLI - 1000 requests/day free | Yes |
+| **OpenCode** | Multi-provider - Supports 75+ backends including Ollama | Yes* |
+
+*OpenCode is free, you pay for API usage based on the provider you configure.
+
+### Changing Providers
+
+1. Go to the **Settings** tab
+2. Select your preferred provider under "AI Provider"
+3. Your selection is saved automatically
+
+The selected provider will be used for all new agent launches.
+
+### Provider Installation
+
+Each provider requires its own CLI installation:
+
+**Claude Code:**
+```bash
+# Install from https://claude.ai/code
+```
+
+**OpenAI Codex:**
+```bash
+npm install -g @openai/codex
+```
+
+**Google Gemini:**
+```bash
+npm install -g @google/gemini-cli
+# or
+brew install gemini-cli
+```
+
+**OpenCode:**
+```bash
+go install github.com/opencode-ai/opencode@latest
+# or
+brew install opencode
+```
+
+### MCP Configuration Per Provider
+
+Each provider needs its own MCP server configuration for task management.
+
+**Claude Code:**
+```bash
+claude mcp add-json --scope user agent-task-planner '{
+  "type": "stdio",
+  "command": "'$(pwd)'/mcp-server/.venv/bin/python",
+  "args": ["-m", "agent_task_planner.server"],
+  "env": {
+    "SUPABASE_URL": "your-url",
+    "SUPABASE_SERVICE_KEY": "your-key"
+  }
+}'
+```
+
+**Gemini CLI** (add to `~/.gemini/settings.json`):
+```json
+{
+  "mcpServers": {
+    "agent-task-planner": {
+      "command": "/path/to/mcp-server/.venv/bin/python",
+      "args": ["-m", "agent_task_planner.server"],
+      "env": {
+        "SUPABASE_URL": "your-url",
+        "SUPABASE_SERVICE_KEY": "your-key"
+      }
+    }
+  }
+}
+```
+
+**OpenCode** (add to `~/.opencode/config.json`):
+```json
+{
+  "mcpServers": {
+    "agent-task-planner": {
+      "command": "/path/to/mcp-server/.venv/bin/python",
+      "args": ["-m", "agent_task_planner.server"],
+      "env": {
+        "SUPABASE_URL": "your-url",
+        "SUPABASE_SERVICE_KEY": "your-key"
+      }
+    }
+  }
+}
+```
+
+### Environment Variables
+
+You can also configure providers via environment variables in `.env`:
+
+```bash
+# Default provider (claude, codex, gemini, opencode)
+ORCHESTRATOR_DEFAULT_PROVIDER=claude
+
+# Override CLI commands if not in PATH
+ORCHESTRATOR_CLAUDE_COMMAND=/path/to/claude
+ORCHESTRATOR_CODEX_COMMAND=/path/to/codex
+ORCHESTRATOR_GEMINI_COMMAND=/path/to/gemini
+ORCHESTRATOR_OPENCODE_COMMAND=/path/to/opencode
+```
+
+---
+
 ## Remote Access via Tailscale
 
 Tailscale allows you to securely access the orchestrator and web UI from anywhere (phone, laptop, etc.) without exposing ports to the public internet.
@@ -858,3 +975,9 @@ If you set up the database before the projects feature was added, run the full `
 5. Agent completes it, "Create login page" auto-promotes to ready
 6. Next agent claims "Create login page"
 7. Continue until parent task can be marked complete
+
+---
+
+<p align="center">
+  <sub>If you like Geoff, consider <a href="https://github.com/sponsors/belgradGoat">supporting the project</a>.</sub>
+</p>

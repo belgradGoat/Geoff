@@ -11,8 +11,8 @@ You're at work. You have an idea for your side project. You pull out your phone,
 | Component | What It Does |
 |-----------|--------------|
 | **Web UI** | Mobile-friendly interface for tasks, files, and agents |
-| **Orchestrator** | Runs on your Mac, launches Claude agents |
-| **MCP Server** | Gives Claude agents access to task tools |
+| **Orchestrator** | Runs on your Mac, launches AI agents (Claude, Codex, Gemini, OpenCode) |
+| **MCP Server** | Gives AI agents access to task tools |
 | **Supabase** | Stores tasks, syncs everywhere |
 
 ## How It Fits Together
@@ -32,7 +32,9 @@ Your Phone                         Your Mac (at home)
     │                                    │
     │                                    ▼
     │                             ┌──────────────┐
-    │                             │ Claude Agent │
+    │                             │   AI Agent   │
+    │                             │ (Claude/Codex│
+    │                             │ /Gemini/etc) │
     │                             └──────┬───────┘
     │                                    │
     │                                    ▼
@@ -54,7 +56,11 @@ Your Phone                         Your Mac (at home)
 ### Prerequisites
 
 - Mac/Linux/Windows machine that stays on
-- [Claude Code CLI](https://claude.ai/code)
+- At least one AI CLI tool:
+  - [Claude Code CLI](https://claude.ai/code) (recommended)
+  - [OpenAI Codex CLI](https://github.com/openai/codex)
+  - [Google Gemini CLI](https://github.com/google-gemini/gemini-cli)
+  - [OpenCode](https://github.com/opencode-ai/opencode)
 - [Tailscale](https://tailscale.com) (free)
 - [Supabase](https://supabase.com) account (free tier)
 

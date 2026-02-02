@@ -37,7 +37,7 @@ A lightweight task management system designed for solo developer workflow where:
 │ Supabase Backend │    │      Agent Orchestrator Service      │
 │  - PostgreSQL    │    │   - Runs on your home machine        │
 │  - Real-time     │    │   - REST API + WebSocket             │
-│  - Free tier OK  │    │   - Spawns/stops Claude Code         │
+│  - Free tier OK  │    │   - Spawns AI agents (multi-provider)│
 └────────┬─────────┘    │   - Streams live output              │
          │              │   - Protected by API key             │
          │              └─────────────────┬───────────────────┘
@@ -46,8 +46,9 @@ A lightweight task management system designed for solo developer workflow where:
          │              │                 │                 │
          │              ▼                 ▼                 ▼
          │      ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-         │      │ Claude Code │   │ Claude Code │   │ Claude Code │
-         │      │  Agent #1   │   │  Agent #2   │   │  Agent #N   │
+         │      │  AI Agent   │   │  AI Agent   │   │  AI Agent   │
+         │      │  (Claude/   │   │  (Codex/    │   │     #N      │
+         │      │   Codex/..) │   │  Gemini/..) │   │             │
          │      └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
          │             │                 │                 │
          │             └─────────────────┼─────────────────┘
@@ -285,7 +286,7 @@ async def claim_task(task_id: str, agent_id: str) -> dict:
 
 ## Agent Orchestrator Service
 
-The orchestrator is a local service that spawns and manages Claude Code agent sessions, accessible remotely via Tailscale.
+The orchestrator is a local service that spawns and manages AI agent sessions, accessible remotely via Tailscale. It supports multiple AI CLI providers: Claude Code, OpenAI Codex, Google Gemini CLI, and OpenCode.
 
 ### Data Model
 
@@ -315,6 +316,7 @@ GET    /api/agents                    # List all agent sessions
 GET    /api/agents/:id                # Get session details
 DELETE /api/agents/:id                # Stop agent session
 POST   /api/agents/:id/restart        # Restart crashed/stopped agent
+GET    /api/agents/providers          # List available AI providers
 ```
 
 #### Batch Operations
@@ -344,6 +346,7 @@ POST /api/agents
 {
   "name": "agent-1",
   "working_directory": "/path/to/repo",
+  "provider": "claude",
   "auto_claim": true,
   "task_filter": {
     "priority_max": 3,
@@ -352,6 +355,8 @@ POST /api/agents
   "prompt": "Work through ready tasks from the task planner. Claim one at a time."
 }
 ```
+
+Supported providers: `claude` (default), `codex`, `gemini`, `opencode`
 
 ### Agent Lifecycle
 
@@ -382,10 +387,10 @@ ORCHESTRATOR_PORT = 8080
 
 ### Agent Spawning Implementation
 
+The orchestrator uses a provider abstraction layer to support multiple AI CLI tools:
+
 ```python
-import subprocess
-import asyncio
-from pathlib import Path
+from .providers import ProviderType, get_provider_registry
 
 class AgentManager:
     def __init__(self):
@@ -395,17 +400,17 @@ class AgentManager:
         self,
         name: str,
         working_directory: str,
-        prompt: str
+        prompt: str,
+        provider: str = "claude"  # claude, codex, gemini, opencode
     ) -> AgentSession:
-        """Spawn a new Claude Code agent session."""
+        """Spawn a new AI agent session."""
 
-        # Build the claude command
-        cmd = [
-            "claude",
-            "--print",  # Non-interactive mode
-            "--output-format", "json",
-            prompt
-        ]
+        # Get provider from registry
+        registry = get_provider_registry()
+        provider_impl = registry.get_provider(ProviderType(provider))
+
+        # Build command using provider abstraction
+        cmd = provider_impl.build_command(prompt, working_directory)
 
         # Spawn the process
         process = await asyncio.create_subprocess_exec(
@@ -421,30 +426,28 @@ class AgentManager:
             pid=process.pid,
             process=process,
             status="running",
+            provider=provider,
             working_directory=working_directory,
             started_at=datetime.utcnow()
         )
 
         self.sessions[session.id] = session
-
-        # Start output streaming task
         asyncio.create_task(self._stream_output(session))
-
         return session
-
-    async def stop_agent(self, session_id: str) -> None:
-        """Gracefully stop an agent session."""
-        session = self.sessions.get(session_id)
-        if session and session.process:
-            session.process.terminate()
-            await session.process.wait()
-            session.status = "stopped"
-            session.stopped_at = datetime.utcnow()
 ```
+
+### Supported Providers
+
+| Provider | CLI Tool | Free Tier | Non-Interactive Flag |
+|----------|----------|-----------|---------------------|
+| `claude` | Claude Code | Yes | `-p` + `--dangerously-skip-permissions` |
+| `codex` | OpenAI Codex | Yes | `--quiet` + `--approval-mode full-auto` |
+| `gemini` | Google Gemini CLI | Yes | `--prompt` |
+| `opencode` | OpenCode | Yes | `--non-interactive` + `--yes` |
 
 ## MCP Server Tools
 
-Tools exposed to Claude Code agents:
+Tools exposed to AI agents:
 
 ### Query Tools
 - `list_tasks(status_filter?, priority_filter?)` - Get tasks matching criteria
@@ -603,6 +606,7 @@ AgentTaskPlanner/
 │   │       │   ├── __init__.py
 │   │       │   ├── agent_manager.py  # Process spawning
 │   │       │   ├── config.py         # Settings
+│   │       │   ├── providers.py      # Multi-provider abstraction
 │   │       │   └── security.py       # API key auth
 │   │       └── models/
 │   │           ├── __init__.py
@@ -618,11 +622,14 @@ AgentTaskPlanner/
 │   │   ├── App.tsx
 │   │   ├── components/
 │   │   │   ├── tasks/          # Task management components
-│   │   │   └── agents/         # Agent control components
-│   │   │       ├── AgentCard.tsx
-│   │   │       ├── AgentPanel.tsx
-│   │   │       ├── LaunchButton.tsx
-│   │   │       └── OutputTerminal.tsx
+│   │   │   ├── agents/         # Agent control components
+│   │   │   │   ├── AgentCard.tsx
+│   │   │   │   ├── AgentPanel.tsx
+│   │   │   │   ├── LaunchButton.tsx
+│   │   │   │   └── OutputTerminal.tsx
+│   │   │   └── settings/       # Settings components
+│   │   │       ├── ProviderSettings.tsx  # AI provider selector
+│   │   │       └── RemoteAccess.tsx
 │   │   ├── hooks/
 │   │   │   ├── useTasks.ts
 │   │   │   ├── useAgents.ts
@@ -635,11 +642,7 @@ AgentTaskPlanner/
 │       └── manifest.json
 │
 └── supabase/
-    └── migrations/
-        ├── 001_initial_schema.sql
-        ├── 002_rls_policies.sql
-        ├── 003_triggers.sql
-        └── 004_agent_sessions.sql
+    └── schema.sql          # Complete database schema (run in Supabase SQL Editor)
 ```
 
 ## Environment Variables
@@ -654,7 +657,12 @@ SUPABASE_SERVICE_KEY=xxxxx  # MCP server only
 ORCHESTRATOR_API_KEY=xxxxx              # Secret key for API auth
 ORCHESTRATOR_HOST=100.x.x.x             # Tailscale IP (not 0.0.0.0!)
 ORCHESTRATOR_PORT=8080
-CLAUDE_PATH=/usr/local/bin/claude       # Path to Claude CLI
+# Provider Configuration
+ORCHESTRATOR_DEFAULT_PROVIDER=claude    # Default: claude, codex, gemini, opencode
+ORCHESTRATOR_CLAUDE_COMMAND=claude      # Path to Claude CLI
+ORCHESTRATOR_CODEX_COMMAND=codex        # Path to Codex CLI
+ORCHESTRATOR_GEMINI_COMMAND=gemini      # Path to Gemini CLI
+ORCHESTRATOR_OPENCODE_COMMAND=opencode  # Path to OpenCode CLI
 
 # Web UI
 VITE_APP_TITLE=Agent Task Planner
@@ -704,42 +712,3 @@ tailscale ip -4
 }
 ```
 
-## Open Questions
-
-1. **Auth:** Do we need login? Or is obscurity (private Supabase URL) sufficient for solo use?
-   - *Recommendation:* Start without auth, add later if needed. RLS policies are in place for future expansion.
-
-2. **Git integration:** Should tasks link to specific repos/branches?
-   - *Recommendation:* Add optional `repo_url` and `branch` fields to tasks in Phase 2.
-
-3. **Agent assignment:** Simple round-robin or smarter matching based on task type?
-   - *Recommendation:* Start with self-selection (agents claim from ready queue). Add affinity matching later based on task tags/categories.
-
-4. **Notifications:** Any alerting when agents complete/fail tasks?
-   - *Options:* Supabase webhooks → Slack/Discord, or polling from web UI with toast notifications.
-
-5. **Retry Policy:** How many times should a failed task be retried? Manual vs automatic?
-   - *Recommendation:* Manual retry initially (human reviews failure reason). Add `retry_count` and `max_retries` fields for automation later.
-
-6. **Task Timeout:** Should in_progress tasks auto-fail after a duration?
-   - *Recommendation:* Add `started_at` timestamp and a cleanup job that marks stale tasks (e.g., >4 hours) as failed.
-
-7. **Agent Concurrency:** How many agents should run simultaneously?
-   - *Recommendation:* Start with 1, configurable up to N. Consider RAM/CPU limits.
-
-8. **Agent Prompting:** What initial prompt gets agents to work from the task queue?
-   - *Recommendation:* Standard prompt template that instructs agent to claim → work → complete/fail loop.
-
-9. **Persistent Sessions:** Should agents stay alive between tasks or spawn fresh each time?
-   - *Recommendation:* Spawn fresh per task initially (cleaner state). Add persistent mode later for faster iteration.
-
-## Notes
-
-- Start simple, iterate based on actual usage
-- MCP server is the critical path - agents need to read/write tasks
-- Web UI can be ugly initially as long as capture works
-- Mobile capture speed is key - must be faster than opening a text file
-- Orchestrator enables true "lights-out" operation from anywhere
-- Tailscale is the simplest secure remote access - no firewall/port forwarding needed
-- Test orchestrator locally first before enabling Tailscale access
-- Consider running orchestrator as a systemd/launchd service for persistence

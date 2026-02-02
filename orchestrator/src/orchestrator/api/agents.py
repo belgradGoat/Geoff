@@ -29,6 +29,7 @@ class LaunchAgentRequest(BaseModel):
     working_dir: Optional[str] = None
     project_id: Optional[str] = None
     agent_id: Optional[str] = None
+    provider: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -37,6 +38,7 @@ class AgentResponse(BaseModel):
     id: str
     prompt: str
     working_dir: str
+    provider: str = "claude"
     status: str
     pid: Optional[int] = None
     started_at: str
@@ -44,6 +46,24 @@ class AgentResponse(BaseModel):
     exit_code: Optional[int] = None
     error: Optional[str] = None
     output_lines: int = 0
+
+
+class ProviderInfo(BaseModel):
+    """Provider information for UI display."""
+
+    id: str
+    name: str
+    description: str
+    has_free_tier: bool
+    mcp_support: bool
+    website: str
+
+
+class ProvidersResponse(BaseModel):
+    """Response for listing providers."""
+
+    providers: list[ProviderInfo]
+    default: str
 
 
 class AgentListResponse(BaseModel):
@@ -61,13 +81,40 @@ class AgentOutputResponse(BaseModel):
     offset: int
 
 
+@router.get("/providers", response_model=ProvidersResponse)
+async def list_providers(
+    _: str = Depends(verify_api_key),
+) -> ProvidersResponse:
+    """List available AI providers."""
+    from ..core.providers import get_provider_registry
+
+    settings = get_settings()
+    registry = get_provider_registry()
+    providers = registry.list_providers()
+
+    return ProvidersResponse(
+        providers=[
+            ProviderInfo(
+                id=p.id,
+                name=p.name,
+                description=p.description,
+                has_free_tier=p.has_free_tier,
+                mcp_support=p.mcp_support,
+                website=p.website,
+            )
+            for p in providers
+        ],
+        default=settings.default_provider,
+    )
+
+
 @router.post("", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 async def launch_agent(
     request: LaunchAgentRequest,
     _: str = Depends(verify_api_key),
     manager: AgentManager = Depends(get_agent_manager),
 ) -> AgentResponse:
-    """Launch a new Claude agent."""
+    """Launch a new agent with the specified provider."""
     try:
         working_dir = request.working_dir
 
@@ -83,6 +130,7 @@ async def launch_agent(
             prompt=request.prompt,
             working_dir=working_dir,
             agent_id=request.agent_id,
+            provider=request.provider,
         )
         return AgentResponse(**agent.to_dict())
     except RuntimeError as e:

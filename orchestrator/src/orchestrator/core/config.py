@@ -31,9 +31,26 @@ class Settings(BaseSettings):
     # Tailscale Configuration
     tailscale_ip: str | None = os.getenv("TAILSCALE_IP")
 
-    # Claude CLI Configuration
+    # Provider Configuration
+    default_provider: str = os.getenv("ORCHESTRATOR_DEFAULT_PROVIDER", "claude")
+
+    # Provider-specific CLI commands (override if not in PATH)
     claude_command: str = os.getenv("ORCHESTRATOR_CLAUDE_COMMAND", "claude")
+    codex_command: str = os.getenv("ORCHESTRATOR_CODEX_COMMAND", "codex")
+    gemini_command: str = os.getenv("ORCHESTRATOR_GEMINI_COMMAND", "gemini")
+    opencode_command: str = os.getenv("ORCHESTRATOR_OPENCODE_COMMAND", "opencode")
+
     default_working_dir: str = os.path.expanduser("~")
+
+    def get_provider_command(self, provider: str) -> str:
+        """Get the command for a specific provider."""
+        commands = {
+            "claude": self.claude_command,
+            "codex": self.codex_command,
+            "gemini": self.gemini_command,
+            "opencode": self.opencode_command,
+        }
+        return commands.get(provider, provider)
 
     # Agent Configuration
     max_agents: int = 10
