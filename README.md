@@ -46,82 +46,37 @@ Phone (anywhere) → Geoff → Your Computer (at home) → Agents do the work
 
 ---
 
-## The setup (one-time, ~30 minutes)
+## Quick Start
 
-You'll need:
-- A computer (Mac/Linux/Windows) that stays on
-- [Claude Code CLI](https://claude.ai/code) installed - or any other provider from the list
-- [Tailscale](https://tailscale.com) (free) for secure remote access
+### Prerequisites
+
+- A computer (Mac/Linux) that stays on
+- [Python 3.10+](https://python.org) and [uv](https://github.com/astral-sh/uv)
+- [Node.js 18+](https://nodejs.org)
+- [Claude Code CLI](https://claude.ai/code) (or another AI provider)
 - [Supabase](https://supabase.com) account (free tier works)
+- [Tailscale](https://tailscale.com) (free) for remote access
 
-### 1. Clone and configure
-
-```bash
-git clone <https://github.com/belgradGoat/Geoff>
-cd AgentTaskPlanner
-cp .env.example .env
-# Edit .env with your Supabase credentials
-```
-
-### 2. Set up the database
-
-1. Go to your Supabase project → SQL Editor
-2. Copy the contents of `supabase/schema.sql`
-3. Paste and run it
-
-That's it - one file sets up everything (tables, indexes, triggers, RLS policies).
-
-### 3. Install and register the MCP server
-
-This gives Claude agents access to task tools.
+### Setup
 
 ```bash
-cd mcp-server
-uv venv && source .venv/bin/activate
-uv pip install -e .
+# 1. Clone and run setup
+git clone https://github.com/belgradGoat/Geoff
+cd Geoff
+./setup.sh
+
+# 2. Set up database (one-time)
+#    Go to Supabase → SQL Editor → paste supabase/schema.sql → Run
+
+# 3. Start Geoff
+./start.sh
 ```
 
-Register with Claude Code (use `--scope user` so spawned agents can access it):
+That's it. Open http://localhost:4011 in your browser.
 
-```bash
-claude mcp add-json --scope user agent-task-planner '{
-  "type": "stdio",
-  "command": "'$(pwd)'/.venv/bin/python",
-  "args": ["-m", "agent_task_planner.server"],
-  "env": {
-    "SUPABASE_URL": "your-supabase-url",
-    "SUPABASE_SERVICE_KEY": "your-service-key"
-  }
-}'
-```
+For remote access from your phone, use your Tailscale IP (shown after setup).
 
-Verify: `claude mcp list` should show `agent-task-planner: ... ✓ Connected`
-
-### 4. Start the orchestrator
-
-```bash
-cd orchestrator
-uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
-```
-
-### 5. Start the web UI
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-### 6. Connect Tailscale
-
-```bash
-tailscale up
-tailscale ip -4  # Note this IP
-```
-
-Now open `http://<your-tailscale-ip>:4011` from your phone. You're in.
-
-> **Full setup guide**: See [docs/userguide.md](docs/userguide.md) for detailed instructions, troubleshooting, and platform-specific notes (Windows/Linux).
+> **Full setup guide**: See [docs/userguide.md](docs/userguide.md) for manual setup, troubleshooting, and platform-specific notes.
 
 ---
 
@@ -189,6 +144,45 @@ This is a community project. If you're a hobby developer who wants to make this 
 
 - [User Guide](docs/userguide.md) - Detailed setup and usage
 - [Developer Guide](docs/developerguide.md) - Architecture and contribution guide
+
+---
+
+## Security
+
+**⚠️ Important Security Notice**
+
+This tool runs AI agents with elevated permissions that bypass normal safety confirmations:
+
+| Provider | Flag Used | What It Does |
+|----------|-----------|--------------|
+| Claude Code | `--dangerously-skip-permissions` | Skips all permission prompts |
+| OpenAI Codex | `--full-auto` | Enables fully autonomous mode |
+| Gemini/OpenCode | (varies) | Runs without user confirmation |
+
+**What this means:**
+- AI agents can read, write, and delete files without asking
+- Agents can execute shell commands autonomously
+- There are no confirmation prompts for destructive actions
+
+**Before using Geoff, you should:**
+1. **Understand the risks** - Review what autonomous AI agents can do
+2. **Configure allowed paths** - Restrict file browser and agent access to specific directories (Settings → Allowed Paths)
+3. **Use on non-critical projects** - Don't run this on production code or systems with sensitive data
+4. **Back up your work** - Have version control (git) and backups in place
+5. **Review agent output** - Always check what the agent did before deploying changes
+6. **Use Tailscale properly** - Ensure your network is secured and only you have access
+
+### Path Restrictions
+
+You can limit which directories Geoff can access:
+
+1. Go to **Settings** → **Allowed Paths**
+2. Add directories you want to allow (e.g., `/Users/you/Projects`)
+3. The file browser and agents will only be able to access these directories and their subdirectories
+
+When no paths are configured, all directories are accessible. Configure allowed paths to improve security.
+
+**This tool is designed for personal productivity and experimentation.** Use at your own risk.
 
 ---
 

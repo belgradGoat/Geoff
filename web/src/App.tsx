@@ -9,6 +9,7 @@ import { ProjectSelector } from './components/projects/ProjectSelector'
 import { FileBrowser } from './components/files/FileBrowser'
 import { RemoteAccess } from './components/settings/RemoteAccess'
 import { ProviderSettings } from './components/settings/ProviderSettings'
+import { AllowedPathsSettings } from './components/settings/AllowedPathsSettings'
 
 type Tab = 'tasks' | 'files' | 'settings'
 
@@ -129,6 +130,7 @@ function App() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ProviderSettings />
               <RemoteAccess />
+              <AllowedPathsSettings />
             </div>
           </div>
         )}

@@ -58,6 +58,9 @@ Thumbs.db
 *.log
 logs/
 
+# PID files (from start.sh)
+.*.pid
+
 # Test coverage
 coverage/
 .coverage

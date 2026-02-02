@@ -55,7 +55,9 @@ Your Phone                         Your Mac (at home)
 
 ### Prerequisites
 
-- Mac/Linux/Windows machine that stays on
+- Mac/Linux machine that stays on
+- [Python 3.10+](https://python.org) and [uv](https://github.com/astral-sh/uv)
+- [Node.js 18+](https://nodejs.org)
 - At least one AI CLI tool:
   - [Claude Code CLI](https://claude.ai/code) (recommended)
   - [OpenAI Codex CLI](https://github.com/openai/codex)
@@ -64,57 +66,40 @@ Your Phone                         Your Mac (at home)
 - [Tailscale](https://tailscale.com) (free)
 - [Supabase](https://supabase.com) account (free tier)
 
-### Steps
+### Automated Setup (Recommended)
 
-1. **Clone the repo**
-   ```bash
-   git clone <repo-url>
-   cd AgentTaskPlanner
-   cp .env.example .env  # Edit with your Supabase credentials
-   ```
+```bash
+# 1. Clone and run the setup wizard
+git clone <repo-url>
+cd Geoff
+./setup.sh
 
-2. **Set up Supabase**
-   - Create a project at supabase.com
-   - Copy `supabase/schema.sql` into the SQL Editor and run it
-   - Copy credentials to `.env`
+# 2. Set up database (one-time)
+#    Go to Supabase → SQL Editor → paste supabase/schema.sql → Run
 
-3. **Install MCP Server**
-   ```bash
-   cd mcp-server
-   uv venv && source .venv/bin/activate
-   uv pip install -e .
-   ```
+# 3. Start Geoff
+./start.sh
+```
 
-4. **Register MCP with Claude**
-   ```bash
-   claude mcp add-json --scope user agent-task-planner '{
-     "type": "stdio",
-     "command": "'$(pwd)'/.venv/bin/python",
-     "args": ["-m", "agent_task_planner.server"],
-     "env": {
-       "SUPABASE_URL": "https://your-project.supabase.co",
-       "SUPABASE_SERVICE_KEY": "your-service-key"
-     }
-   }'
-   ```
+The setup script will:
+- Check prerequisites
+- Prompt for Supabase credentials
+- Create all config files
+- Install dependencies
+- Register MCP server with Claude
 
-5. **Start the orchestrator**
-   ```bash
-   cd ../orchestrator
-   uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
-   ```
+### Managing Services
 
-6. **Start the web UI**
-   ```bash
-   cd ../web
-   npm install && npm run dev
-   ```
+```bash
+./start.sh    # Start orchestrator + web UI
+./stop.sh     # Stop all services
+```
 
-7. **Connect via Tailscale**
-   ```bash
-   tailscale up
-   # Access from phone: http://<tailscale-ip>:4011
-   ```
+Logs are saved to `logs/orchestrator.log` and `logs/web.log`.
+
+### Manual Setup
+
+See [User Guide](userguide.md) for step-by-step manual installation.
 
 ## Task Flow
 
@@ -129,6 +114,41 @@ create → queued → ready → claimed → in_progress → done
 - **claimed/in_progress**: Agent is working on it
 - **done**: Completed
 - **failed**: Errored (auto-retries if configured)
+
+## Security
+
+**⚠️ Important Security Notice**
+
+Geoff runs AI agents with elevated permissions that bypass normal safety confirmations:
+
+- **Claude Code**: Uses `--dangerously-skip-permissions` to skip all permission prompts
+- **OpenAI Codex**: Uses `--full-auto` for fully autonomous operation
+- **Gemini/OpenCode**: Runs without user confirmation
+
+**This means AI agents can:**
+- Read, write, and delete files without asking
+- Execute shell commands autonomously
+- Make changes without confirmation prompts
+
+**Recommended precautions:**
+1. **Configure allowed paths** - Restrict access to specific directories in Settings → Allowed Paths
+2. Use only on non-critical projects and hobby codebases
+3. Always have version control (git) and backups in place
+4. Review agent output before deploying any changes
+5. Secure your Tailscale network properly
+6. Never run on systems with sensitive data or credentials
+
+### Path Restrictions
+
+Limit file browser and agent access to specific directories:
+
+1. Go to **Settings** → **Allowed Paths**
+2. Add directories you want to allow
+3. Only those directories (and subdirectories) will be accessible
+
+**This tool is for personal productivity and experimentation only.** Use with appropriate caution.
+
+---
 
 ## License
 

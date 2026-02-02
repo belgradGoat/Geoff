@@ -4,14 +4,70 @@ This guide covers the architecture, technical implementation, and extension poin
 
 ## Table of Contents
 
-1. [Architecture Overview](#architecture-overview)
-2. [Database Schema](#database-schema)
-3. [MCP Server](#mcp-server)
-4. [Orchestrator](#orchestrator)
-5. [Web UI](#web-ui)
-6. [Security](#security)
-7. [Extending the System](#extending-the-system)
-8. [Troubleshooting](#troubleshooting)
+1. [Development Setup](#development-setup)
+2. [Architecture Overview](#architecture-overview)
+3. [Database Schema](#database-schema)
+4. [MCP Server](#mcp-server)
+5. [Orchestrator](#orchestrator)
+6. [Web UI](#web-ui)
+7. [Security](#security)
+8. [Extending the System](#extending-the-system)
+9. [Troubleshooting](#troubleshooting)
+
+---
+
+## Development Setup
+
+### Quick Start
+
+The fastest way to get a development environment running:
+
+```bash
+# Clone and setup
+git clone https://github.com/belgradGoat/Geoff
+cd Geoff
+./setup.sh
+
+# Set up database (one-time)
+# Go to Supabase → SQL Editor → paste supabase/schema.sql → Run
+
+# Start all services
+./start.sh
+```
+
+### Development Mode
+
+For active development, run services in the foreground with hot-reload:
+
+**Terminal 1 - Orchestrator (with reload):**
+```bash
+cd orchestrator
+source .venv/bin/activate
+uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080 --reload
+```
+
+**Terminal 2 - Web UI (with hot-reload):**
+```bash
+cd web
+npm run dev
+```
+
+### Project Scripts
+
+| Script | Description |
+|--------|-------------|
+| `./setup.sh` | Interactive setup wizard (safe to re-run) |
+| `./start.sh` | Start services in background |
+| `./stop.sh` | Stop all background services |
+
+### Re-running Setup
+
+The setup script is idempotent - you can run it again to:
+- Update credentials
+- Re-register MCP server
+- Reinstall dependencies
+
+It will prompt before overwriting existing configuration.
 
 ---
 

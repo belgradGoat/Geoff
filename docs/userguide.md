@@ -1,6 +1,6 @@
 # Geoff User Guide
 
-This guide covers how to use Geoff for managing tasks and orchestrating Claude agents.
+This guide covers how to use Geoff for managing tasks and orchestrating AI agents.
 
 ## Table of Contents
 
@@ -11,10 +11,12 @@ This guide covers how to use Geoff for managing tasks and orchestrating Claude a
 5. [Project Management](#project-management)
 6. [Task Management](#task-management)
 7. [Agent Orchestration](#agent-orchestration)
-8. [Remote Access via Tailscale](#remote-access-via-tailscale)
-9. [Using MCP Tools](#using-mcp-tools)
-10. [Troubleshooting](#troubleshooting)
-11. [Tips and Best Practices](#tips-and-best-practices)
+8. [AI Providers](#ai-providers)
+9. [Allowed Paths (Security)](#allowed-paths-security)
+10. [Remote Access via Tailscale](#remote-access-via-tailscale)
+11. [Using MCP Tools](#using-mcp-tools)
+12. [Troubleshooting](#troubleshooting)
+13. [Tips and Best Practices](#tips-and-best-practices)
 
 ---
 
@@ -22,98 +24,150 @@ This guide covers how to use Geoff for managing tasks and orchestrating Claude a
 
 ### Prerequisites
 
-- A Supabase account with a project set up
+- Python 3.10+ and [uv](https://github.com/astral-sh/uv) (Python package manager)
 - Node.js 18+ for the Web UI
-- Python 3.10+ for MCP Server and Orchestrator
-- Claude Code CLI (for agent launching)
+- A [Supabase](https://supabase.com) account (free tier works)
+- At least one AI CLI tool (Claude Code recommended)
 
-### Initial Setup
+### Automated Setup (Recommended)
 
-1. **Configure Environment Variables**
+The easiest way to get started is with the setup script:
 
-   Copy the example files and fill in your credentials:
-   ```bash
-   cp .env.example .env
-   cp web/.env.example web/.env
-   ```
+```bash
+git clone https://github.com/belgradGoat/Geoff
+cd Geoff
+./setup.sh
+```
 
-   Required variables:
-   | Variable | Description |
-   |----------|-------------|
-   | `SUPABASE_URL` | Your Supabase project URL |
-   | `SUPABASE_ANON_KEY` | Public anon key for client access |
-   | `SUPABASE_SERVICE_KEY` | Service key for MCP server (bypasses RLS) |
-   | `ORCHESTRATOR_API_KEY` | Secret key for orchestrator API auth |
+The script will:
+1. Check that prerequisites are installed
+2. Prompt for your Supabase credentials
+3. Create all configuration files (`.env`, `web/.env`)
+4. Install Python dependencies for MCP server and orchestrator
+5. Install Node dependencies for web UI
+6. Register the MCP server with Claude Code
 
-   Optional variables:
-   | Variable | Description | Default |
-   |----------|-------------|---------|
-   | `ORCHESTRATOR_CLAUDE_COMMAND` | Path to Claude CLI executable | `claude` |
-   | `ORCHESTRATOR_HOST` | Host to bind the orchestrator | `0.0.0.0` |
-   | `ORCHESTRATOR_PORT` | Port for the orchestrator | `8080` |
-   | `TAILSCALE_IP` | Your Tailscale IP for remote access | (auto-detected) |
+After setup, you need to run the database schema once:
+1. Go to your Supabase project → SQL Editor
+2. Copy the contents of `supabase/schema.sql`
+3. Paste and run it
 
-2. **Run Database Schema**
+Then start Geoff:
 
-   In your Supabase SQL Editor:
-   1. Open `supabase/schema.sql`
-   2. Copy the entire contents
-   3. Paste into the SQL Editor and click "Run"
+```bash
+./start.sh
+```
 
-   This single file creates all tables, indexes, triggers, and RLS policies.
+Open http://localhost:4011 in your browser.
 
-3. **Install the MCP Server**
+### Managing Services
 
-   ```bash
-   cd mcp-server
-   uv venv && source .venv/bin/activate
-   uv pip install -e .
-   ```
+| Command | Description |
+|---------|-------------|
+| `./start.sh` | Start orchestrator and web UI in background |
+| `./stop.sh` | Stop all services |
+| `./setup.sh` | Re-run setup (safe to run multiple times) |
 
-4. **Add MCP Server to Claude Code**
+Logs are saved to:
+- `logs/orchestrator.log`
+- `logs/web.log`
 
-   Use `--scope user` so the MCP server is available to ALL Claude instances (including agents spawned by the orchestrator):
+---
 
-   ```bash
-   claude mcp add-json --scope user agent-task-planner '{
-     "type": "stdio",
-     "command": "'$(pwd)'/mcp-server/.venv/bin/python",
-     "args": ["-m", "agent_task_planner.server"],
-     "env": {
-       "SUPABASE_URL": "https://your-project.supabase.co",
-       "SUPABASE_SERVICE_KEY": "your-service-key-here"
-     }
-   }'
-   ```
+### Manual Setup
 
-   **Important notes:**
-   - Run this from the project root directory (the `$(pwd)` expands to your current path)
-   - Or replace `$(pwd)` with the full absolute path to your AgentTaskPlanner directory
-   - The `--scope user` flag is critical for orchestrator-spawned agents to access the MCP tools
+If you prefer to set things up manually, follow these steps:
 
-   Verify the server is connected:
-   ```bash
-   claude mcp list
-   ```
+#### 1. Configure Environment Variables
 
-   You should see:
-   ```
-   agent-task-planner: /path/to/.../mcp-server/.venv/bin/python -m agent_task_planner.server - ✓ Connected
-   ```
+Copy the example files and fill in your credentials:
+```bash
+cp .env.example .env
+cp web/.env.example web/.env
+```
 
-   Inside Claude Code, use `/mcp` to check server status.
+Required variables:
+| Variable | Description |
+|----------|-------------|
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_ANON_KEY` | Public anon key for client access |
+| `SUPABASE_SERVICE_KEY` | Service key for MCP server (bypasses RLS) |
+| `ORCHESTRATOR_API_KEY` | Secret key for orchestrator API auth |
 
-5. **Start the Services**
+Optional variables:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ORCHESTRATOR_DEFAULT_PROVIDER` | Default AI provider | `claude` |
+| `ORCHESTRATOR_HOST` | Host to bind the orchestrator | `0.0.0.0` |
+| `ORCHESTRATOR_PORT` | Port for the orchestrator | `8080` |
+| `TAILSCALE_IP` | Your Tailscale IP for remote access | (auto-detected) |
 
-   Terminal 1 (Web UI):
-   ```bash
-   cd web && npm run dev
-   ```
+#### 2. Run Database Schema
 
-   Terminal 2 (Orchestrator):
-   ```bash
-   cd orchestrator && uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
-   ```
+In your Supabase SQL Editor:
+1. Open `supabase/schema.sql`
+2. Copy the entire contents
+3. Paste into the SQL Editor and click "Run"
+
+This single file creates all tables, indexes, triggers, and RLS policies.
+
+#### 3. Install the MCP Server
+
+```bash
+cd mcp-server
+uv venv && source .venv/bin/activate
+uv pip install -e .
+```
+
+#### 4. Add MCP Server to Claude Code
+
+Use `--scope user` so the MCP server is available to ALL Claude instances (including agents spawned by the orchestrator):
+
+```bash
+claude mcp add-json --scope user agent-task-planner '{
+  "type": "stdio",
+  "command": "'$(pwd)'/mcp-server/.venv/bin/python",
+  "args": ["-m", "agent_task_planner.server"],
+  "env": {
+    "SUPABASE_URL": "https://your-project.supabase.co",
+    "SUPABASE_SERVICE_KEY": "your-service-key-here"
+  }
+}'
+```
+
+**Important notes:**
+- Run this from the project root directory (the `$(pwd)` expands to your current path)
+- Or replace `$(pwd)` with the full absolute path to your project directory
+- The `--scope user` flag is critical for orchestrator-spawned agents to access the MCP tools
+
+Verify the server is connected:
+```bash
+claude mcp list
+```
+
+You should see:
+```
+agent-task-planner: /path/to/.../mcp-server/.venv/bin/python -m agent_task_planner.server - ✓ Connected
+```
+
+Inside Claude Code, use `/mcp` to check server status.
+
+#### 5. Start the Services
+
+Terminal 1 (Web UI):
+```bash
+cd web && npm run dev
+```
+
+Terminal 2 (Orchestrator):
+```bash
+cd orchestrator && uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
+```
+
+Or use the start script:
+```bash
+./start.sh
+```
 
 ---
 
@@ -625,6 +679,56 @@ ORCHESTRATOR_OPENCODE_COMMAND=/path/to/opencode
 
 ---
 
+## Allowed Paths (Security)
+
+By default, Geoff's file browser can access any directory on your system. You can restrict access to specific directories for improved security.
+
+### Configuring Allowed Paths
+
+1. Go to the **Settings** tab
+2. Find the **Allowed Paths** section
+3. Paste a directory path (e.g., `/Users/you/Projects`)
+4. Click **Add Path**
+5. Repeat for any additional directories
+
+### How It Works
+
+| Configuration | Behavior |
+|---------------|----------|
+| **No paths configured** | All directories accessible (default) |
+| **Paths configured** | Only listed directories and their subdirectories are accessible |
+
+When paths are configured:
+- The **Files** tab can only browse within allowed directories
+- **Quick paths** only show allowed directories
+- **Parent navigation** stops at allowed directory boundaries
+- **Agents** are restricted to allowed paths when browsing files
+
+### Example Configuration
+
+```
+Allowed Paths:
+├── /Users/you/Documents/GitHub     (your projects)
+├── /Users/you/Projects             (more projects)
+└── /Users/you/Code                 (code directory)
+```
+
+With this configuration:
+- You can browse `/Users/you/Documents/GitHub/my-project/src/`
+- You cannot browse `/Users/you/Desktop/` or `/etc/`
+
+### Removing Restrictions
+
+To remove a path restriction, hover over the path in the Settings and click the **X** button.
+
+To allow unrestricted access again, remove all paths from the list.
+
+### Storage Location
+
+Allowed paths are stored in `~/.geoff/allowed_paths.json` on your machine.
+
+---
+
 ## Remote Access via Tailscale
 
 Tailscale allows you to securely access the orchestrator and web UI from anywhere (phone, laptop, etc.) without exposing ports to the public internet.
@@ -684,6 +788,18 @@ If Tailscale is not detected, it will show setup instructions.
 - **No public exposure**: Ports are only accessible within your Tailnet
 - **API key required**: The orchestrator still requires `X-API-Key` header
 - **Supabase RLS**: Database access is protected by row-level security
+
+**⚠️ Autonomous Agent Warning**
+
+When you launch agents, they run with elevated permissions:
+- **Claude Code**: `--dangerously-skip-permissions` - skips all permission prompts
+- **OpenAI Codex**: `--full-auto` - fully autonomous mode
+- **Other providers**: Run without user confirmation
+
+This means agents can read, write, and delete files without asking. Always:
+1. Use only on hobby projects, not production systems
+2. Keep backups and use version control (git)
+3. Review agent changes before deploying
 
 ### Mobile Workflow Example
 

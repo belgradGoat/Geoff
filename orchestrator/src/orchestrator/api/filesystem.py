@@ -11,8 +11,25 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from ..core.security import verify_api_key
+from ..core.allowed_paths import (
+    get_allowed_paths,
+    set_allowed_paths,
+    add_allowed_path,
+    remove_allowed_path,
+    is_path_allowed,
+    get_allowed_roots,
+)
 
 router = APIRouter(prefix="/api/filesystem", tags=["filesystem"])
+
+
+def validate_path_access(path: Path) -> None:
+    """Raise HTTPException if path is not within allowed directories."""
+    if not is_path_allowed(str(path)):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Path is outside allowed directories."
+        )
 
 # Maximum file size to read (5MB)
 MAX_FILE_SIZE = 5 * 1024 * 1024
@@ -80,10 +97,19 @@ async def browse_directory(
     _: str = Depends(verify_api_key),
 ) -> BrowseResponse:
     """Browse a directory, listing files and subdirectories."""
+    allowed_paths = get_allowed_paths()
+
     if not request.path:
-        path = Path.home()
+        # If allowed paths are configured, use the first one as default
+        if allowed_paths:
+            path = Path(allowed_paths[0])
+        else:
+            path = Path.home()
     else:
         path = Path(os.path.expanduser(request.path))
+
+    # Validate path access
+    validate_path_access(path)
 
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Path not found: {path}")
@@ -91,7 +117,11 @@ async def browse_directory(
     if not path.is_dir():
         raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
 
-    parent_path = str(path.parent) if path.parent != path else None
+    # Only show parent path if it's also within allowed directories
+    if path.parent != path and is_path_allowed(str(path.parent)):
+        parent_path = str(path.parent)
+    else:
+        parent_path = None
 
     entries = []
     total_files = 0
@@ -157,6 +187,9 @@ async def read_file(
 ) -> FileContentResponse:
     """Read the contents of a text file."""
     path = Path(os.path.expanduser(request.path))
+
+    # Validate path access
+    validate_path_access(path)
 
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
@@ -230,6 +263,23 @@ async def get_quick_paths(
     _: str = Depends(verify_api_key),
 ) -> QuickPathsResponse:
     """Get common paths for quick navigation."""
+    allowed_paths = get_allowed_paths()
+
+    # If allowed paths are configured, use them as quick paths
+    if allowed_paths:
+        paths = []
+        for p in allowed_paths:
+            path = Path(p)
+            if path.exists() and path.is_dir():
+                paths.append(FileEntry(
+                    name=path.name or str(path),
+                    path=str(path),
+                    is_dir=True,
+                    is_file=False,
+                ))
+        return QuickPathsResponse(paths=paths)
+
+    # Otherwise, show default common paths
     home = Path.home()
 
     candidates = [
@@ -276,6 +326,9 @@ async def create_directory(
 ) -> CreateDirectoryResponse:
     """Create a new directory."""
     parent = Path(os.path.expanduser(request.parent_path))
+
+    # Validate path access
+    validate_path_access(parent)
 
     if not parent.exists():
         raise HTTPException(status_code=404, detail=f"Parent path not found: {parent}")
@@ -353,4 +406,88 @@ async def get_system_info(
         home_dir=str(Path.home()),
         tailscale_ip=tailscale_ip,
         orchestrator_url=orchestrator_url,
+    )
+
+
+# =============================================================================
+# Allowed Paths Management
+# =============================================================================
+
+class AllowedPathsResponse(BaseModel):
+    """Response containing allowed paths."""
+    paths: list[str]
+    restricted: bool  # True if paths are configured, False if all paths allowed
+
+
+class SetAllowedPathsRequest(BaseModel):
+    """Request to set allowed paths."""
+    paths: list[str]
+
+
+class AddAllowedPathRequest(BaseModel):
+    """Request to add a single allowed path."""
+    path: str
+
+
+class RemoveAllowedPathRequest(BaseModel):
+    """Request to remove an allowed path."""
+    path: str
+
+
+@router.get("/allowed-paths", response_model=AllowedPathsResponse)
+async def get_allowed_paths_endpoint(
+    _: str = Depends(verify_api_key),
+) -> AllowedPathsResponse:
+    """Get the list of allowed paths."""
+    paths = get_allowed_paths()
+    return AllowedPathsResponse(
+        paths=paths,
+        restricted=len(paths) > 0,
+    )
+
+
+@router.post("/allowed-paths", response_model=AllowedPathsResponse)
+async def set_allowed_paths_endpoint(
+    request: SetAllowedPathsRequest,
+    _: str = Depends(verify_api_key),
+) -> AllowedPathsResponse:
+    """Set the list of allowed paths (replaces existing)."""
+    paths = set_allowed_paths(request.paths)
+    return AllowedPathsResponse(
+        paths=paths,
+        restricted=len(paths) > 0,
+    )
+
+
+@router.post("/allowed-paths/add", response_model=AllowedPathsResponse)
+async def add_allowed_path_endpoint(
+    request: AddAllowedPathRequest,
+    _: str = Depends(verify_api_key),
+) -> AllowedPathsResponse:
+    """Add a path to the allowed list."""
+    path = Path(os.path.expanduser(request.path))
+
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Path not found: {path}")
+
+    if not path.is_dir():
+        raise HTTPException(status_code=400, detail=f"Path is not a directory: {path}")
+
+    paths = add_allowed_path(request.path)
+    return AllowedPathsResponse(
+        paths=paths,
+        restricted=len(paths) > 0,
+    )
+
+
+@router.post("/allowed-paths/remove", response_model=AllowedPathsResponse)
+async def remove_allowed_path_endpoint(
+    request: RemoveAllowedPathRequest,
+    _: str = Depends(verify_api_key),
+) -> AllowedPathsResponse:
+    """Remove a path from the allowed list."""
+    paths = remove_allowed_path(request.path)
+    return AllowedPathsResponse(
+        paths=paths,
+        restricted=len(paths) > 0,
     )
