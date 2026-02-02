@@ -1,5 +1,7 @@
 import { useState, useRef, FormEvent, ChangeEvent } from 'react'
 import { useTasks } from '../../hooks/useTasks'
+import { useAgents } from '../../hooks/useAgents'
+import { useProjects } from '../../hooks/useProjects'
 import { TaskAttachment } from '../../lib/supabase'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB per file
@@ -34,9 +36,15 @@ export function QuickAdd() {
   const [priority, setPriority] = useState(0)
   const [attachments, setAttachments] = useState<TaskAttachment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLaunching, setIsLaunching] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const isLaunchingRef = useRef(false)
   const addTask = useTasks((state) => state.addTask)
+  const projectFilter = useTasks((state) => state.projectFilter)
+  const { launchAgent, selectAgent } = useAgents()
+  const { projects } = useProjects()
+  const selectedProject = projects.find(p => p.id === projectFilter)
 
   const totalSize = attachments.reduce((sum, a) => sum + a.size, 0)
 
@@ -110,6 +118,50 @@ export function QuickAdd() {
     }
   }
 
+  const getDefaultPrompt = () => {
+    const projectContext = selectedProject
+      ? `Filter tasks to project_id "${projectFilter}".`
+      : ''
+
+    return `You have access to the agent-task-planner MCP server. Use it to:
+1. Call task_get_ready to find tasks that are ready to be worked on. ${projectContext}
+2. Pick the highest priority task and call task_claim with your agent ID to claim it.
+3. Read the task title, description, and any attachments to understand what needs to be done.
+4. Complete the work described in the task.
+5. Call task_complete when done, or task_fail if you encounter an issue.
+
+Work through one task at a time. Be thorough and follow the task requirements.`
+  }
+
+  const handleLaunch = async () => {
+    // Use ref to prevent duplicate launches from rapid clicks
+    // State updates are async and can be bypassed with fast double-clicks
+    if (isLaunchingRef.current) {
+      return
+    }
+    isLaunchingRef.current = true
+    setIsLaunching(true)
+    try {
+      const prompt = getDefaultPrompt()
+      const taskTitle = selectedProject
+        ? `Working on ${selectedProject.name} tasks`
+        : 'Working on ready tasks'
+      const agent = await launchAgent(
+        prompt,
+        selectedProject?.path || undefined,
+        projectFilter || undefined,
+        undefined,
+        taskTitle
+      )
+      if (agent) {
+        selectAgent(agent.id)
+      }
+    } finally {
+      setIsLaunching(false)
+      isLaunchingRef.current = false
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="card p-4 space-y-3">
       {/* Mobile: stacked layout, Desktop: horizontal layout */}
@@ -141,6 +193,14 @@ export function QuickAdd() {
             className="btn-primary whitespace-nowrap"
           >
             {isSubmitting ? 'Adding...' : 'Add Task'}
+          </button>
+          <button
+            type="button"
+            onClick={handleLaunch}
+            disabled={isLaunching}
+            className="btn-secondary whitespace-nowrap"
+          >
+            {isLaunching ? 'Launching...' : 'Launch Tasks'}
           </button>
         </div>
       </div>

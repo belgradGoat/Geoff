@@ -10,13 +10,13 @@ interface AgentsState {
 
   // Actions
   fetchAgents: () => Promise<void>
-  launchAgent: (prompt: string, workingDir?: string, projectId?: string, provider?: string) => Promise<Agent | null>
+  launchAgent: (prompt: string, workingDir?: string, projectId?: string, provider?: string, taskTitle?: string) => Promise<Agent | null>
   stopAgent: (id: string) => Promise<void>
   selectAgent: (id: string | null) => void
   streamAgentOutput: (id: string) => () => void
 }
 
-export const useAgents = create<AgentsState>((set, get) => ({
+export const useAgents = create<AgentsState>((set) => ({
   agents: [],
   loading: false,
   error: null,
@@ -33,11 +33,11 @@ export const useAgents = create<AgentsState>((set, get) => ({
     }
   },
 
-  launchAgent: async (prompt: string, workingDir?: string, projectId?: string, provider?: string) => {
+  launchAgent: async (prompt: string, workingDir?: string, projectId?: string, provider?: string, taskTitle?: string) => {
     try {
       // Get provider from localStorage if not specified
       const selectedProvider = provider || localStorage.getItem('geoff-provider') || undefined
-      const agent = await orchestrator.launchAgent(prompt, workingDir, projectId, selectedProvider)
+      const agent = await orchestrator.launchAgent(prompt, workingDir, projectId, selectedProvider, taskTitle)
       set((state) => ({
         agents: [agent, ...state.agents],
         agentOutput: { ...state.agentOutput, [agent.id]: [] },

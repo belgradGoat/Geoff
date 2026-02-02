@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { orchestrator, FileEntry, FileContentResponse } from '../../lib/orchestrator'
 import { useProjects } from '../../hooks/useProjects'
+import { useTasks } from '../../hooks/useTasks'
 
 function formatSize(bytes?: number): string {
   if (bytes === undefined) return ''
@@ -113,12 +114,32 @@ export function FileBrowser() {
   const [creating, setCreating] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
-  const { fetchProjects } = useProjects()
+  const { fetchProjects, projects } = useProjects()
+  const { projectFilter } = useTasks()
+
+  // Get the selected project's path
+  const selectedProject = projects.find(p => p.id === projectFilter)
+  const projectPath = selectedProject?.path
+
+  // Track if we've done the initial navigation to the project path
+  const initialNavDone = useRef(false)
 
   useEffect(() => {
     loadQuickPaths()
-    browse(undefined)
   }, [])
+
+  // Navigate to project directory when component mounts or when project filter changes
+  useEffect(() => {
+    // If we have a project selected, navigate to its directory
+    if (projectPath) {
+      initialNavDone.current = true
+      browse(projectPath)
+    } else if (!initialNavDone.current) {
+      // Only browse undefined (default) if no project is selected and we haven't navigated yet
+      initialNavDone.current = true
+      browse(undefined)
+    }
+  }, [projectPath])
 
   const loadQuickPaths = async () => {
     try {

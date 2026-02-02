@@ -39,6 +39,7 @@ class Agent:
     process: Optional[asyncio.subprocess.Process] = None
     is_chat_mode: bool = False
     message_count: int = 0
+    task_title: Optional[str] = None  # Friendly display name for the task
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API response."""
@@ -54,6 +55,7 @@ class Agent:
             "exit_code": self.exit_code,
             "error": self.error,
             "output_lines": len(self.output_buffer),
+            "task_title": self.task_title,
         }
 
 
@@ -71,6 +73,7 @@ class AgentManager:
         working_dir: Optional[str] = None,
         agent_id: Optional[str] = None,
         provider: Optional[str] = None,
+        task_title: Optional[str] = None,
     ) -> Agent:
         """
         Launch a new agent with the specified provider.
@@ -80,6 +83,7 @@ class AgentManager:
             working_dir: Working directory for the agent
             agent_id: Optional custom agent ID
             provider: Provider to use (claude, codex, gemini, opencode)
+            task_title: Friendly display name for the task
 
         Returns:
             The created Agent instance
@@ -96,6 +100,7 @@ class AgentManager:
             prompt=prompt,
             working_dir=working_dir,
             provider=provider,
+            task_title=task_title,
         )
 
         self.agents[agent_id] = agent

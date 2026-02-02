@@ -30,6 +30,7 @@ class LaunchAgentRequest(BaseModel):
     project_id: Optional[str] = None
     agent_id: Optional[str] = None
     provider: Optional[str] = None
+    task_title: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -46,6 +47,7 @@ class AgentResponse(BaseModel):
     exit_code: Optional[int] = None
     error: Optional[str] = None
     output_lines: int = 0
+    task_title: Optional[str] = None
 
 
 class ProviderInfo(BaseModel):
@@ -131,6 +133,7 @@ async def launch_agent(
             working_dir=working_dir,
             agent_id=request.agent_id,
             provider=request.provider,
+            task_title=request.task_title,
         )
         return AgentResponse(**agent.to_dict())
     except RuntimeError as e:

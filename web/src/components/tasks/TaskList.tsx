@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Task, TaskStatus } from '../../lib/supabase'
 import { useTasks, groupTasksByStatus } from '../../hooks/useTasks'
+import { useAgents } from '../../hooks/useAgents'
 
 const statusConfig: Record<TaskStatus, { label: string; color: string; bg: string }> = {
   queued: { label: 'Queued', color: 'text-geoff-text-muted', bg: 'bg-geoff-card' },
@@ -25,11 +27,19 @@ interface TaskItemProps {
   task: Task
   onSelect: () => void
   isSelected: boolean
+  onLaunchTask: (task: Task) => void
+  isLaunching: boolean
 }
 
-function TaskItem({ task, onSelect, isSelected }: TaskItemProps) {
+function TaskItem({ task, onSelect, isSelected, onLaunchTask, isLaunching }: TaskItemProps) {
   const config = statusConfig[task.status]
   const borderColor = priorityBorders[task.priority] || priorityBorders[0]
+  const canLaunch = task.status === 'ready' || task.status === 'queued'
+
+  const handleLaunchClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onLaunchTask(task)
+  }
 
   return (
     <div
@@ -42,9 +52,34 @@ function TaskItem({ task, onSelect, isSelected }: TaskItemProps) {
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-medium text-geoff-text flex-1">{task.title}</h3>
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.color}`}>
-          {config.label}
-        </span>
+        <div className="flex items-center gap-2">
+          {canLaunch && (
+            <button
+              onClick={handleLaunchClick}
+              disabled={isLaunching}
+              className={`p-1 rounded transition-colors ${
+                isLaunching
+                  ? 'text-geoff-text-dim cursor-not-allowed'
+                  : 'text-geoff-accent hover:bg-geoff-accent-dim hover:text-geoff-accent'
+              }`}
+              title="Launch this task"
+            >
+              {isLaunching ? (
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              )}
+            </button>
+          )}
+          <span className={`px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.color}`}>
+            {config.label}
+          </span>
+        </div>
       </div>
 
       {task.description && (
@@ -85,9 +120,11 @@ interface TaskColumnProps {
   tasks: Task[]
   selectedTaskId: string | null
   onSelectTask: (id: string) => void
+  onLaunchTask: (task: Task) => void
+  launchingTaskId: string | null
 }
 
-function TaskColumn({ status, tasks, selectedTaskId, onSelectTask }: TaskColumnProps) {
+function TaskColumn({ status, tasks, selectedTaskId, onSelectTask, onLaunchTask, launchingTaskId }: TaskColumnProps) {
   const config = statusConfig[status]
 
   if (tasks.length === 0) return null
@@ -107,6 +144,8 @@ function TaskColumn({ status, tasks, selectedTaskId, onSelectTask }: TaskColumnP
             task={task}
             onSelect={() => onSelectTask(task.id)}
             isSelected={selectedTaskId === task.id}
+            onLaunchTask={onLaunchTask}
+            isLaunching={launchingTaskId === task.id}
           />
         ))}
       </div>
@@ -115,8 +154,39 @@ function TaskColumn({ status, tasks, selectedTaskId, onSelectTask }: TaskColumnP
 }
 
 export function TaskList() {
-  const { tasks, loading, error, selectedTaskId, selectTask } = useTasks()
+  const { tasks, loading, error, selectedTaskId, selectTask, projectFilter } = useTasks()
+  const { launchAgent, selectAgent } = useAgents()
+  const [launchingTaskId, setLaunchingTaskId] = useState<string | null>(null)
   const groupedTasks = groupTasksByStatus(tasks)
+
+  const handleLaunchTask = async (task: Task) => {
+    if (launchingTaskId) return
+    setLaunchingTaskId(task.id)
+
+    try {
+      const projectPath = task.projects?.path
+      const projectId = task.project_id || projectFilter || undefined
+
+      const prompt = `You have access to the agent-task-planner MCP server. Use it to:
+1. Call task_claim with task_id "${task.id}" and your agent ID to claim this specific task.
+2. Read the task title, description, and any attachments to understand what needs to be done.
+3. Complete the work described in the task.
+4. Call task_complete when done, or task_fail if you encounter an issue.
+
+The task you need to work on:
+- Title: ${task.title}
+${task.description ? `- Description: ${task.description}` : ''}
+
+Be thorough and follow the task requirements.`
+
+      const agent = await launchAgent(prompt, projectPath || undefined, projectId, undefined, task.title)
+      if (agent) {
+        selectAgent(agent.id)
+      }
+    } finally {
+      setLaunchingTaskId(null)
+    }
+  }
 
   if (loading && tasks.length === 0) {
     return (
@@ -152,6 +222,8 @@ export function TaskList() {
           tasks={groupedTasks[status]}
           selectedTaskId={selectedTaskId}
           onSelectTask={selectTask}
+          onLaunchTask={handleLaunchTask}
+          launchingTaskId={launchingTaskId}
         />
       ))}
     </div>

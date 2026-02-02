@@ -1,7 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAgents } from '../../hooks/useAgents'
-import { useTasks } from '../../hooks/useTasks'
-import { useProjects } from '../../hooks/useProjects'
 import { Agent } from '../../lib/orchestrator'
 
 const statusColors: Record<Agent['status'], string> = {
@@ -9,6 +7,36 @@ const statusColors: Record<Agent['status'], string> = {
   running: 'bg-geoff-success-dim text-geoff-success',
   stopped: 'bg-geoff-card text-geoff-text-muted',
   failed: 'bg-geoff-error-dim text-geoff-error',
+}
+
+// Extract task title from agent - prefer task_title field, fallback to prompt parsing
+function getTaskTitle(agent: Agent): string | null {
+  // First, use the explicit task_title field if available
+  if (agent.task_title) {
+    return agent.task_title
+  }
+  // Fallback: extract from prompt for backward compatibility
+  const match = agent.prompt.match(/- Title: (.+?)(?:\n|$)/)
+  return match ? match[1].trim() : null
+}
+
+// Format time duration from start time to now
+function formatDuration(startedAt: string): string {
+  const start = new Date(startedAt)
+  const now = new Date()
+  const diffMs = now.getTime() - start.getTime()
+
+  const seconds = Math.floor(diffMs / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`
+  }
+  return `${seconds}s`
 }
 
 interface AgentItemProps {
@@ -19,6 +47,17 @@ interface AgentItemProps {
 }
 
 function AgentItem({ agent, isSelected, onSelect, onStop }: AgentItemProps) {
+  const taskTitle = getTaskTitle(agent)
+  const isRunning = agent.status === 'running' || agent.status === 'starting'
+  const [, setTick] = useState(0)
+
+  // Update duration display every second when running
+  useEffect(() => {
+    if (!isRunning) return
+    const interval = setInterval(() => setTick((t) => t + 1), 1000)
+    return () => clearInterval(interval)
+  }, [isRunning])
+
   return (
     <div
       onClick={onSelect}
@@ -39,7 +78,24 @@ function AgentItem({ agent, isSelected, onSelect, onStop }: AgentItemProps) {
           {agent.status}
         </span>
       </div>
-      <p className="text-sm text-geoff-text-muted mt-1 line-clamp-1">{agent.prompt}</p>
+
+      {/* Show task name or running duration */}
+      <div className="mt-1">
+        {taskTitle ? (
+          <p className="text-sm text-geoff-text">
+            <span className="text-geoff-accent font-medium">Running:</span>{' '}
+            <span className="line-clamp-1">{taskTitle}</span>
+          </p>
+        ) : isRunning ? (
+          <p className="text-sm text-geoff-text-muted">
+            <span className="text-geoff-warning">Running since:</span>{' '}
+            {formatDuration(agent.started_at)}
+          </p>
+        ) : (
+          <p className="text-sm text-geoff-text-muted line-clamp-1">{agent.prompt}</p>
+        )}
+      </div>
+
       <div className="flex items-center justify-between mt-2">
         <span className="text-xs text-geoff-text-dim">
           {new Date(agent.started_at).toLocaleTimeString()}
@@ -101,18 +157,9 @@ export function AgentPanel() {
     error,
     selectedAgentId,
     fetchAgents,
-    launchAgent,
     stopAgent,
     selectAgent,
   } = useAgents()
-
-  const { projectFilter } = useTasks()
-  const { projects } = useProjects()
-  const selectedProject = projects.find(p => p.id === projectFilter)
-
-  const [prompt, setPrompt] = useState('')
-  const [workingDir, setWorkingDir] = useState('')
-  const [isLaunching, setIsLaunching] = useState(false)
 
   useEffect(() => {
     fetchAgents()
@@ -120,87 +167,11 @@ export function AgentPanel() {
     return () => clearInterval(interval)
   }, [fetchAgents])
 
-  const getDefaultPrompt = () => {
-    const projectContext = selectedProject
-      ? `Filter tasks to project_id "${projectFilter}".`
-      : ''
-
-    return `You have access to the agent-task-planner MCP server. Use it to:
-1. Call task_get_ready to find tasks that are ready to be worked on. ${projectContext}
-2. Pick the highest priority task and call task_claim with your agent ID to claim it.
-3. Read the task title, description, and any attachments to understand what needs to be done.
-4. Complete the work described in the task.
-5. Call task_complete when done, or task_fail if you encounter an issue.
-
-Work through one task at a time. Be thorough and follow the task requirements.`
-  }
-
-  const handleLaunch = async () => {
-    setIsLaunching(true)
-    try {
-      const finalPrompt = prompt.trim() || getDefaultPrompt()
-      const agent = await launchAgent(
-        finalPrompt,
-        workingDir || undefined,
-        projectFilter || undefined
-      )
-      if (agent) {
-        selectAgent(agent.id)
-        setPrompt('')
-        setWorkingDir('')
-      }
-    } finally {
-      setIsLaunching(false)
-    }
-  }
-
   const selectedAgent = agents.find((a) => a.id === selectedAgentId)
 
   return (
     <div className="card p-4">
-      <h2 className="text-lg font-semibold text-geoff-text mb-4">Agent Orchestrator</h2>
-
-      {/* Launch form */}
-      <div className="space-y-3 mb-6">
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Custom prompt (optional) - leave empty to work on ready tasks by priority"
-          rows={2}
-          className="input resize-none"
-        />
-        {selectedProject ? (
-          <div className="flex items-center gap-2">
-            <div className="flex-1 px-3 py-2 bg-geoff-surface border border-geoff-border rounded-lg text-sm text-geoff-text-muted truncate">
-              Project: {selectedProject.name}
-            </div>
-            <button
-              onClick={handleLaunch}
-              disabled={isLaunching}
-              className="btn-primary"
-            >
-              {isLaunching ? 'Launching...' : 'Launch'}
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={workingDir}
-              onChange={(e) => setWorkingDir(e.target.value)}
-              placeholder="Working directory (or select a project)"
-              className="input flex-1"
-            />
-            <button
-              onClick={handleLaunch}
-              disabled={isLaunching}
-              className="btn-primary"
-            >
-              {isLaunching ? 'Launching...' : 'Launch'}
-            </button>
-          </div>
-        )}
-      </div>
+      <h2 className="text-lg font-semibold text-geoff-text mb-4">Active Sessions</h2>
 
       {error && (
         <div className="p-3 bg-geoff-error-dim border border-geoff-error/30 rounded-lg text-geoff-error text-sm mb-4">
@@ -211,9 +182,9 @@ Work through one task at a time. Be thorough and follow the task requirements.`
       {/* Agent list */}
       <div className="space-y-2 mb-4">
         {loading && agents.length === 0 ? (
-          <div className="text-geoff-text-muted text-center py-4">Loading agents...</div>
+          <div className="text-geoff-text-muted text-center py-4">Loading sessions...</div>
         ) : agents.length === 0 ? (
-          <div className="text-geoff-text-muted text-center py-4">No agents running</div>
+          <div className="text-geoff-text-muted text-center py-4">No active sessions</div>
         ) : (
           agents.map((agent) => (
             <AgentItem

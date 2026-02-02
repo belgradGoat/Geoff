@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { orchestrator, DirectoryEntry } from '../../lib/orchestrator'
+import { orchestrator, FileEntry } from '../../lib/orchestrator'
 
 interface FolderBrowserProps {
   isOpen: boolean
@@ -10,8 +10,8 @@ interface FolderBrowserProps {
 export function FolderBrowser({ isOpen, onClose, onSelect }: FolderBrowserProps) {
   const [currentPath, setCurrentPath] = useState<string>('')
   const [parentPath, setParentPath] = useState<string | null>(null)
-  const [entries, setEntries] = useState<DirectoryEntry[]>([])
-  const [quickPaths, setQuickPaths] = useState<DirectoryEntry[]>([])
+  const [entries, setEntries] = useState<FileEntry[]>([])
+  const [quickPaths, setQuickPaths] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
