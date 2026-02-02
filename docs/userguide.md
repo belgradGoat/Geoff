@@ -11,12 +11,13 @@ This guide covers how to use Geoff for managing tasks and orchestrating AI agent
 5. [Project Management](#project-management)
 6. [Task Management](#task-management)
 7. [Agent Orchestration](#agent-orchestration)
-8. [AI Providers](#ai-providers)
-9. [Allowed Paths (Security)](#allowed-paths-security)
-10. [Remote Access via Tailscale](#remote-access-via-tailscale)
-11. [Using MCP Tools](#using-mcp-tools)
-12. [Troubleshooting](#troubleshooting)
-13. [Tips and Best Practices](#tips-and-best-practices)
+8. [Interactive Chat](#interactive-chat)
+9. [AI Providers](#ai-providers)
+10. [Allowed Paths (Security)](#allowed-paths-security)
+11. [Remote Access via Tailscale](#remote-access-via-tailscale)
+12. [Using MCP Tools](#using-mcp-tools)
+13. [Troubleshooting](#troubleshooting)
+14. [Tips and Best Practices](#tips-and-best-practices)
 
 ---
 
@@ -244,13 +245,14 @@ sudo tailscale up
 
 ## Using the Web UI
 
-The web UI is available at `http://localhost:4011` and has three main tabs:
+The web UI is available at `http://localhost:4011` and has four main tabs:
 
 ### Navigation Tabs
 
 | Tab | Description |
 |-----|-------------|
 | **Tasks** | Task management, quick add, and agent launching |
+| **Chat** | Interactive conversations with AI agents |
 | **Files** | Browse your Mac's filesystem, view file contents |
 | **Settings** | Remote access configuration, Tailscale setup |
 
@@ -559,6 +561,59 @@ When you select an agent, its output streams live via WebSocket. You'll see:
 - Agent's thinking and actions
 - Tool calls and results
 - Final outcome
+
+---
+
+## Interactive Chat
+
+The **Chat** tab provides an interactive conversation interface with AI agents. Unlike task-based agents that run autonomously, chat sessions allow you to have a back-and-forth conversation with the AI.
+
+### Starting a Chat Session
+
+1. Go to the **Chat** tab
+2. Select your working directory (or use a project's directory)
+3. Click "Start Session"
+4. Begin typing messages to interact with the AI agent
+
+### Slash Commands
+
+Chat sessions support slash commands for quick actions. Type `/help` to see all available commands.
+
+#### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show available commands |
+| `/clear` | Clear chat history (instant, no server round-trip) |
+| `/status` | Show session status (provider, message count, working directory) |
+| `/providers` | List all available AI providers |
+| `/switch <provider>` | Switch to a different provider (claude, codex, gemini, opencode) |
+| `/new` | Start a new conversation |
+
+#### Provider-Specific Commands
+
+Provider-specific commands like `/usage` (Claude), `/model` (Codex/Gemini), `/compact`, etc. are **not supported** in Geoff's chat interface. This is because Geoff uses a message-per-request model rather than true interactive CLI mode.
+
+To use provider-specific commands, run the CLI directly:
+- Claude: `claude` (then use `/usage`, `/compact`, etc.)
+- Codex: `codex` (then use `/model`, `/diff`, etc.)
+- Gemini: `gemini` (then use `/settings`, `/memory`, etc.)
+
+### Chat vs Task-Based Agents
+
+| Feature | Chat Session | Task Agent |
+|---------|--------------|------------|
+| **Interaction** | Interactive back-and-forth | Autonomous, fire-and-forget |
+| **Use Case** | Debugging, exploration, quick questions | Implementing features, running tasks |
+| **Session State** | Maintains conversation context | Single prompt execution |
+| **Slash Commands** | Supported | Not applicable |
+
+### Tips for Chat Sessions
+
+1. **Use `/clear` for fresh starts**: If the conversation gets cluttered, clear it without restarting the session
+2. **Check `/status` for context**: See how many messages you've exchanged and confirm your provider
+3. **Provider-specific features**: Use `/help` to discover what commands your provider supports
+4. **Message-per-request model**: Each message spawns a new CLI invocation with conversation history maintained
 
 ---
 
@@ -1034,6 +1089,19 @@ Tailscale already encrypts all traffic, so HTTPS is not needed.
 #### "Could not find relationship between 'tasks' and 'projects'"
 
 If you set up the database before the projects feature was added, run the full `supabase/schema.sql` again, or manually run just the projects section from it.
+
+#### Chat Session Issues
+
+**"Session not found" when connecting to chat:**
+- The session may have been closed. Start a new session.
+
+**Slash command returns "not available for provider":**
+- Different providers support different commands. Use `/help` to see available commands.
+
+**Chat messages not appearing:**
+- Check WebSocket connection in browser dev tools
+- Verify orchestrator is running and accessible
+- Check API key is correct
 
 #### "Agent failed to start" or "claude: command not found"
 

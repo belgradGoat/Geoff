@@ -10,7 +10,7 @@ You're at work. You have an idea for your side project. You pull out your phone,
 
 | Component | What It Does |
 |-----------|--------------|
-| **Web UI** | Mobile-friendly interface for tasks, files, and agents |
+| **Web UI** | Mobile-friendly interface for tasks, files, agents, and chat |
 | **Orchestrator** | Runs on your Mac, launches AI agents (Claude, Codex, Gemini, OpenCode) |
 | **MCP Server** | Gives AI agents access to task tools |
 | **Supabase** | Stores tasks, syncs everywhere |

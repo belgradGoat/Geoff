@@ -319,6 +319,14 @@ POST   /api/agents/:id/restart        # Restart crashed/stopped agent
 GET    /api/agents/providers          # List available AI providers
 ```
 
+#### Interactive Chat Sessions
+
+```
+POST   /api/chat/sessions             # Start interactive chat session
+DELETE /api/chat/sessions/:id         # End chat session
+WS     /api/chat/sessions/:id/ws      # Bidirectional chat WebSocket
+```
+
 #### Batch Operations
 
 ```
@@ -338,6 +346,26 @@ Events:
 - { type: "status", status: "running|stopped|crashed" }
 - { type: "task", action: "claimed|completed|failed", task_id: "..." }
 ```
+
+#### Chat WebSocket Protocol
+
+```
+WebSocket: ws://[tailscale-ip]:8080/api/chat/sessions/:id/ws?api_key=...
+
+Client → Server:
+- { type: "input", data: "user message or /command" }
+
+Server → Client:
+- { type: "output", data: "agent response line" }
+- { type: "message_complete" }
+- { type: "error", message: "..." }
+- { type: "heartbeat" }
+```
+
+**Slash Commands**: Messages starting with `/` are processed as commands:
+- Orchestrator commands (`/help`, `/clear`, `/status`, `/providers`, `/switch`) are handled locally
+- Session commands (`/new`) affect the session state
+- Provider-specific commands are not supported (use CLI directly)
 
 ### Launch Agent Request
 

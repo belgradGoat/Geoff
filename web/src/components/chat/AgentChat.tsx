@@ -10,7 +10,8 @@ export function AgentChat() {
     isTyping,
     sendMessage,
     startSession,
-    endSession
+    endSession,
+    pendingAssistantMessage
   } = useChat()
 
   const { projectFilter } = useTasks()
@@ -20,10 +21,10 @@ export function AgentChat() {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom on new messages or streaming updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, pendingAssistantMessage])
 
   const handleSend = () => {
     if (!input.trim()) return
@@ -85,7 +86,18 @@ export function AgentChat() {
         {messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} />
         ))}
-        {isTyping && (
+        {/* Show streaming message as it builds up */}
+        {pendingAssistantMessage && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] rounded-lg p-3 bg-geoff-surface border border-geoff-border text-geoff-text">
+              <div className="whitespace-pre-wrap text-sm">{pendingAssistantMessage}</div>
+              <div className="text-xs mt-1 text-geoff-text-dim animate-pulse">
+                streaming...
+              </div>
+            </div>
+          </div>
+        )}
+        {isTyping && !pendingAssistantMessage && (
           <div className="text-geoff-text-muted text-sm animate-pulse">Agent is typing...</div>
         )}
         <div ref={messagesEndRef} />

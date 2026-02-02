@@ -22,6 +22,8 @@ uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
 
 ## API Endpoints
 
+### Agent Endpoints
+
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/agents` | Launch new agent |
@@ -29,6 +31,22 @@ uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
 | GET | `/api/agents/:id` | Get agent details |
 | DELETE | `/api/agents/:id` | Stop agent |
 | WS | `/api/agents/:id/stream` | Live output stream |
+
+### Chat Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/chat/sessions` | Start interactive chat session |
+| DELETE | `/api/chat/sessions/:id` | End chat session |
+| WS | `/api/chat/sessions/:id/ws` | Bidirectional chat WebSocket |
+
+Chat sessions support slash commands:
+- `/help` - Show available commands
+- `/clear` - Clear chat history
+- `/status` - Show session info
+- `/providers` - List providers
+- `/switch <provider>` - Switch provider
+- `/new` - Start new conversation
 
 ## Configuration
 

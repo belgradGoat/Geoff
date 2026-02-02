@@ -14,12 +14,15 @@ interface ChatState {
   isConnected: boolean
   isTyping: boolean
   ws: WebSocket | null
+  pendingAssistantMessage: string | null  // Accumulates streaming output
 
   // Actions
   startSession: (workingDir?: string) => Promise<void>
   endSession: () => void
   sendMessage: (content: string) => void
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void
+  appendToAssistant: (content: string) => void
+  finalizeAssistantMessage: () => void
   setTyping: (typing: boolean) => void
   clearMessages: () => void
 }
@@ -30,6 +33,7 @@ export const useChat = create<ChatState>((set, get) => ({
   isConnected: false,
   isTyping: false,
   ws: null,
+  pendingAssistantMessage: null,
 
   startSession: async (workingDir) => {
     try {
@@ -40,12 +44,18 @@ export const useChat = create<ChatState>((set, get) => ({
       const ws = orchestrator.connectChatWebSocket(session.id, {
         onMessage: (data) => {
           if (data.type === 'output' && data.data) {
-            get().addMessage({ role: 'assistant', content: data.data })
+            // Accumulate streaming output into pending message
+            get().appendToAssistant(data.data)
+          } else if (data.type === 'message_complete') {
+            // Finalize the accumulated message
+            get().finalizeAssistantMessage()
             set({ isTyping: false })
           } else if (data.type === 'typing') {
             set({ isTyping: true })
           } else if (data.type === 'error') {
+            get().finalizeAssistantMessage()  // Finalize any pending message first
             get().addMessage({ role: 'system', content: `Error: ${data.message || 'Unknown error'}` })
+            set({ isTyping: false })
           }
         },
         onClose: () => {
@@ -97,6 +107,13 @@ export const useChat = create<ChatState>((set, get) => ({
       return
     }
 
+    // Handle /clear locally for instant feedback
+    if (content.trim() === '/clear') {
+      set({ messages: [], pendingAssistantMessage: null })
+      get().addMessage({ role: 'system', content: 'Chat history cleared.' })
+      return
+    }
+
     // Add user message to state
     get().addMessage({ role: 'user', content })
 
@@ -117,7 +134,24 @@ export const useChat = create<ChatState>((set, get) => ({
     }))
   },
 
+  appendToAssistant: (content) => {
+    set((state) => {
+      const current = state.pendingAssistantMessage
+      // Append new line to pending message (with newline separator if not first line)
+      const newContent = current ? `${current}\n${content}` : content
+      return { pendingAssistantMessage: newContent }
+    })
+  },
+
+  finalizeAssistantMessage: () => {
+    const { pendingAssistantMessage } = get()
+    if (pendingAssistantMessage) {
+      get().addMessage({ role: 'assistant', content: pendingAssistantMessage })
+      set({ pendingAssistantMessage: null })
+    }
+  },
+
   setTyping: (typing) => set({ isTyping: typing }),
 
-  clearMessages: () => set({ messages: [] })
+  clearMessages: () => set({ messages: [], pendingAssistantMessage: null })
 }))

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useTasks } from './hooks/useTasks'
 import { useProjects } from './hooks/useProjects'
 import { QuickAdd } from './components/tasks/QuickAdd'
@@ -14,10 +14,30 @@ import { AgentChat } from './components/chat/AgentChat'
 
 type Tab = 'tasks' | 'files' | 'settings' | 'chat'
 
+const tabs: { id: Tab; label: string }[] = [
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'chat', label: 'Chat' },
+  { id: 'files', label: 'Files' },
+  { id: 'settings', label: 'Settings' },
+]
+
 function App() {
   const { fetchTasks, subscribeToChanges, selectedTaskId, projectFilter } = useTasks()
   const { fetchProjects } = useProjects()
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     fetchProjects()
@@ -50,49 +70,63 @@ function App() {
               </div>
             </div>
 
-            {/* Tab navigation */}
-            <nav className="flex gap-1 bg-geoff-card p-1 rounded-xl border border-geoff-border">
-              <button
-                onClick={() => setActiveTab('tasks')}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                  activeTab === 'tasks'
-                    ? 'bg-geoff-accent text-white'
-                    : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
-                }`}
-              >
-                Tasks
-              </button>
-              <button
-                onClick={() => setActiveTab('files')}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                  activeTab === 'files'
-                    ? 'bg-geoff-accent text-white'
-                    : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
-                }`}
-              >
-                Files
-              </button>
-              <button
-                onClick={() => setActiveTab('settings')}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                  activeTab === 'settings'
-                    ? 'bg-geoff-accent text-white'
-                    : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
-                }`}
-              >
-                Settings
-              </button>
-              <button
-                onClick={() => setActiveTab('chat')}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                  activeTab === 'chat'
-                    ? 'bg-geoff-accent text-white'
-                    : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
-                }`}
-              >
-                Chat
-              </button>
+            {/* Desktop Tab navigation - hidden on mobile */}
+            <nav className="hidden md:flex gap-1 bg-geoff-card p-1 rounded-xl border border-geoff-border">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-geoff-accent text-white'
+                      : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </nav>
+
+            {/* Mobile hamburger menu */}
+            <div className="relative md:hidden" ref={menuRef}>
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="p-2 rounded-lg bg-geoff-card border border-geoff-border text-geoff-text hover:bg-geoff-surface transition-all"
+                aria-label="Menu"
+              >
+                {mobileMenuOpen ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Mobile dropdown menu */}
+              {mobileMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-geoff-card border border-geoff-border rounded-xl shadow-lg py-1 z-50">
+                  {tabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab(tab.id)
+                        setMobileMenuOpen(false)
+                      }}
+                      className={`w-full text-left px-4 py-3 text-sm font-medium transition-all ${
+                        activeTab === tab.id
+                          ? 'bg-geoff-accent text-white'
+                          : 'text-geoff-text hover:bg-geoff-surface'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>

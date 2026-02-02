@@ -9,6 +9,10 @@ from pydantic import BaseModel
 from ..core.agent_manager import get_agent_manager, AgentManager, AgentStatus
 from ..core.config import get_settings
 from ..core.security import verify_api_key
+from ..core.command_processor import CommandProcessor
+
+# Module-level command processor instance
+command_processor = CommandProcessor()
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -129,8 +133,17 @@ async def chat_websocket(
 
                     # Stream response back
                     try:
-                        async for line in manager.send_chat_message(session_id, user_input):
-                            await websocket.send_json({"type": "output", "data": line})
+                        # Check if this is a slash command
+                        if command_processor.is_command(user_input):
+                            # Process command and stream response
+                            async for line in command_processor.process(
+                                user_input, session_id, agent.provider, manager
+                            ):
+                                await websocket.send_json({"type": "output", "data": line})
+                        else:
+                            # Regular message - send to agent
+                            async for line in manager.send_chat_message(session_id, user_input):
+                                await websocket.send_json({"type": "output", "data": line})
 
                         # Signal message complete
                         await websocket.send_json({"type": "message_complete"})

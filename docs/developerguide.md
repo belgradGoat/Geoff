@@ -402,12 +402,15 @@ orchestrator/
     ├── main.py              # FastAPI app entry
     ├── api/
     │   ├── agents.py        # REST endpoints
+    │   ├── chat.py          # Chat session endpoints
     │   └── websocket.py     # WebSocket streaming
     └── core/
         ├── config.py        # Settings management
         ├── security.py      # API key middleware
         ├── providers.py     # Multi-provider abstraction
-        └── agent_manager.py # Process management
+        ├── agent_manager.py # Process management
+        ├── commands.py      # Slash command registry
+        └── command_processor.py # Command routing
 ```
 
 ### Provider Abstraction
@@ -462,6 +465,8 @@ process = await asyncio.create_subprocess_exec(
 
 ### API Endpoints
 
+#### Agent Endpoints
+
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/agents` | Launch new agent (accepts `provider` field) |
@@ -471,6 +476,14 @@ process = await asyncio.create_subprocess_exec(
 | GET | `/api/agents/:id/output` | Get buffered output |
 | WS | `/api/agents/:id/stream` | Live output stream |
 | GET | `/api/agents/providers` | List available providers |
+
+#### Chat Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/chat/sessions` | Start interactive chat session |
+| DELETE | `/api/chat/sessions/:id` | End chat session |
+| WS | `/api/chat/sessions/:id/ws` | Bidirectional chat WebSocket |
 
 ### WebSocket Protocol
 
@@ -487,6 +500,76 @@ Messages are JSON objects:
 { "type": "done", "status": "stopped", "exit_code": 0 }
 ```
 
+### Chat System
+
+The chat system provides interactive conversation sessions with AI agents using a message-per-request model.
+
+#### Chat Session Flow
+
+1. **Create session**: `POST /api/chat/sessions` creates an Agent in chat mode
+2. **Connect WebSocket**: Client connects to `/api/chat/sessions/:id/ws`
+3. **Send messages**: Client sends `{ type: "input", data: "message" }`
+4. **Receive response**: Server streams `{ type: "output", data: "line" }` messages
+5. **Message complete**: Server sends `{ type: "message_complete" }` when done
+
+#### Slash Command System
+
+Chat messages starting with `/` are processed as slash commands before being sent to the agent.
+
+**Command Categories:**
+
+| Category | Description | Examples |
+|----------|-------------|----------|
+| `ORCHESTRATOR` | Handled locally by Geoff | `/help`, `/clear`, `/status` |
+| `SESSION` | Affect session state | `/new` |
+
+Note: `PASSTHROUGH` commands (forwarding to CLI) are not supported because Geoff uses a message-per-request model, not true interactive mode.
+
+**Command Registry (`commands.py`):**
+
+```python
+@dataclass
+class CommandDefinition:
+    name: str                    # Command name without /
+    category: CommandCategory    # ORCHESTRATOR, PASSTHROUGH, SESSION
+    description: str             # Help text
+    providers: list[str]         # Empty = all providers
+```
+
+**Command Processor (`command_processor.py`):**
+
+```python
+class CommandProcessor:
+    def is_command(self, message: str) -> bool:
+        return message.strip().startswith('/')
+
+    async def process(self, message, session_id, provider, agent_manager):
+        # Parse command and route to appropriate handler
+        cmd_name, args = self.parse(message)
+        cmd = self.registry.get(cmd_name)
+
+        if cmd.category == CommandCategory.ORCHESTRATOR:
+            # Handle locally
+        elif cmd.category == CommandCategory.PASSTHROUGH:
+            # Forward to agent CLI
+        elif cmd.category == CommandCategory.SESSION:
+            # Affect session state
+```
+
+**Adding New Commands:**
+
+1. Register in `CommandRegistry._register_defaults()`:
+   ```python
+   self.register(CommandDefinition(
+       "mycommand", CommandCategory.PASSTHROUGH,
+       "Description here", ["claude", "gemini"]  # or [] for all
+   ))
+   ```
+
+2. For orchestrator commands, add handler in `CommandProcessor._handle_orchestrator_command()`
+
+3. For session commands, add handler in `CommandProcessor._handle_session_command()`
+
 ### Authentication
 
 API key is required in the `X-API-Key` header for REST endpoints and as a query parameter for WebSocket:
@@ -496,6 +579,7 @@ GET /api/agents
 X-API-Key: your-secret-key
 
 WS /api/agents/:id/stream?api_key=your-secret-key
+WS /api/chat/sessions/:id/ws?api_key=your-secret-key
 ```
 
 ### Provider Configuration
@@ -550,7 +634,8 @@ web/
     ├── hooks/
     │   ├── useTasks.ts      # Task state
     │   ├── useAgents.ts     # Agent state (provider-aware)
-    │   └── useProjects.ts   # Project state
+    │   ├── useProjects.ts   # Project state
+    │   └── useChat.ts       # Chat session state
     └── components/
         ├── tasks/
         │   ├── QuickAdd.tsx
@@ -558,6 +643,8 @@ web/
         │   └── TaskDetail.tsx
         ├── agents/
         │   └── AgentPanel.tsx
+        ├── chat/
+        │   └── ChatPanel.tsx # Interactive chat UI
         ├── files/
         │   └── FileBrowser.tsx
         ├── projects/
