@@ -33,7 +33,7 @@ Your limited time should be spent on the product design and things you enjoy in 
 ## How it works
 
 ```
-Phone (anywhere) → Geoff → Your Computer (at home) → Agents do the work
+Phone (any device) → Geoff → Your PC → Agents do the work
          ↑                                              ↓
          └─────- Verify on the phone and your machine ──┘
 ```
@@ -50,7 +50,7 @@ Phone (anywhere) → Geoff → Your Computer (at home) → Agents do the work
 
 ### Prerequisites
 
-- A computer (Mac/Linux) that stays on
+- A computer (Windows/Mac/Linux) that stays on
 - [Python 3.10+](https://python.org) and [uv](https://github.com/astral-sh/uv)
 - [Node.js 18+](https://nodejs.org)
 - [Claude Code CLI](https://claude.ai/code) (or another AI provider)
@@ -65,7 +65,7 @@ git clone https://github.com/belgradGoat/Geoff
 cd Geoff
 ./setup.sh
 
-# 2. Set up database (one-time)
+# 2. Set up database (one-time, detailed setup steps available in UserGuide.md)
 #    Go to Supabase → SQL Editor → paste supabase/schema.sql → Run
 
 # 3. Start Geoff
@@ -87,7 +87,8 @@ For remote access from your phone, use your Tailscale IP (shown after setup).
 | **Create tasks** | Quick-add ideas before you forget them |
 | **Launch agents** | Tell Claude to work on a task |
 | **Watch progress** | Stream agent output in real-time |
-| **Browse files** | Navigate your Mac's filesystem |
+| **Create Projects** | Create folders for new projects and make your ideas happen |
+| **Browse and view files** | Navigate your computer filesystem |
 | **View code** | Read files to provide context |
 | **Create folders** | Set up new project directories |
 
@@ -101,7 +102,7 @@ For remote access from your phone, use your Tailscale IP (shown after setup).
 **Monday evening, home from work:**
 - Open Geoff, check the task
 - Agent completed, ready for review
-- You review the diff, tweak as needed, continue on
+- You review the diff, tweak as needed, move to the next task
 
 **Time spent coding: 5 minutes instead of 30**
 
