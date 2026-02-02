@@ -100,8 +100,8 @@ For remote access from your phone, use your Tailscale IP (shown after setup).
 
 **Monday evening, home from work:**
 - Open Geoff, check the task
-- Agent completed it, pushed a commit
-- You review the diff, tweak one line, done
+- Agent completed, ready for review
+- You review the diff, tweak as needed, continue on
 
 **Time spent coding: 5 minutes instead of 30**
 
