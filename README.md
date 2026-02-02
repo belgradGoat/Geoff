@@ -192,7 +192,7 @@ MIT - Do whatever you want with it. See [LICENSE.md](LICENSE.md) and [Trademarks
 
 ---
 
-*Built by hobby developers, for hobby developers.*
+*Vibe Code Anywhere*
 
 <p align="center">
   <a href="https://github.com/sponsors/belgradGoat">
