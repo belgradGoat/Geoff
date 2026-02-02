@@ -123,10 +123,10 @@ This is **not** for:
 
 ## Philosophy
 
-- **Your machine, your data** - Everything runs locally, nothing sent anywhere except Supabase (which you control)
+- **Securely connect to your machine** - Same agents, same files as when you're at your desk. Continue work from anywhere.
 - **Phone-first** - Designed for quick interactions on mobile
-- **AI as collaborator** - Agents work on the boring parts, you do the creative parts
-- **Community first** - This is a tool we build together. If I ever charge for anything, it'll be for convenience (like a hosted version that skips the setup), never for features
+- **AI as collaborator** - Agents work on your projects while you're busy
+- **Community first** - I built this tool for the community, and is intended to stay free.
 
 ---
 
