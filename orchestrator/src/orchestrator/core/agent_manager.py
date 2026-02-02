@@ -3,9 +3,14 @@
 import asyncio
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
+
+
+def utcnow() -> datetime:
+    """Return timezone-aware UTC datetime for proper timezone handling in frontends."""
+    return datetime.now(timezone.utc)
 
 from .config import get_settings
 from typing import AsyncGenerator
@@ -31,7 +36,7 @@ class Agent:
     provider: str = "claude"
     status: AgentStatus = AgentStatus.STARTING
     pid: Optional[int] = None
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=utcnow)
     stopped_at: Optional[datetime] = None
     exit_code: Optional[int] = None
     error: Optional[str] = None
@@ -163,7 +168,7 @@ class AgentManager:
             await process.wait()
 
             agent.exit_code = process.returncode
-            agent.stopped_at = datetime.utcnow()
+            agent.stopped_at = utcnow()
             agent.status = AgentStatus.STOPPED if process.returncode == 0 else AgentStatus.FAILED
 
             if process.returncode != 0:
@@ -172,7 +177,7 @@ class AgentManager:
         except Exception as e:
             agent.status = AgentStatus.FAILED
             agent.error = str(e)
-            agent.stopped_at = datetime.utcnow()
+            agent.stopped_at = utcnow()
 
         finally:
             # Notify subscribers that stream is done
@@ -193,21 +198,24 @@ class AgentManager:
         if not agent:
             raise KeyError(f"Agent {agent_id} not found")
 
-        if agent.process and agent.status == AgentStatus.RUNNING:
-            try:
-                agent.process.terminate()
-                # Give it a moment to terminate gracefully
+        if agent.status == AgentStatus.RUNNING:
+            # Terminate the subprocess if one is running
+            if agent.process:
                 try:
-                    await asyncio.wait_for(agent.process.wait(), timeout=5.0)
-                except asyncio.TimeoutError:
-                    # Force kill if it doesn't terminate
-                    agent.process.kill()
-                    await agent.process.wait()
-            except ProcessLookupError:
-                pass  # Process already gone
+                    agent.process.terminate()
+                    # Give it a moment to terminate gracefully
+                    try:
+                        await asyncio.wait_for(agent.process.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        # Force kill if it doesn't terminate
+                        agent.process.kill()
+                        await agent.process.wait()
+                except ProcessLookupError:
+                    pass  # Process already gone
 
+            # Always update status for running agents (including chat mode with no process)
             agent.status = AgentStatus.STOPPED
-            agent.stopped_at = datetime.utcnow()
+            agent.stopped_at = utcnow()
 
         return agent
 

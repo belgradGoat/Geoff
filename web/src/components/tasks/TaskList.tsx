@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Task, TaskStatus } from '../../lib/supabase'
 import { useTasks, groupTasksByStatus } from '../../hooks/useTasks'
 import { useAgents } from '../../hooks/useAgents'
+import { TaskItem } from './TaskItem'
 
 const statusConfig: Record<TaskStatus, { label: string; color: string; bg: string }> = {
   queued: { label: 'Queued', color: 'text-geoff-text-muted', bg: 'bg-geoff-card' },
@@ -13,118 +14,17 @@ const statusConfig: Record<TaskStatus, { label: string; color: string; bg: strin
   blocked: { label: 'Blocked', color: 'text-orange-400', bg: 'bg-orange-500/10' },
 }
 
-const priorityBorders = [
-  'border-l-geoff-text-dim',
-  'border-l-geoff-accent',
-  'border-l-geoff-warning',
-  'border-l-orange-500',
-  'border-l-geoff-error',
-]
-
-const statusOrder: TaskStatus[] = ['in_progress', 'assigned', 'ready', 'queued', 'blocked', 'done', 'failed']
-
-interface TaskItemProps {
-  task: Task
-  onSelect: () => void
-  isSelected: boolean
-  onLaunchTask: (task: Task) => void
-  isLaunching: boolean
-}
-
-function TaskItem({ task, onSelect, isSelected, onLaunchTask, isLaunching }: TaskItemProps) {
-  const config = statusConfig[task.status]
-  const borderColor = priorityBorders[task.priority] || priorityBorders[0]
-  const canLaunch = task.status === 'ready' || task.status === 'queued'
-
-  const handleLaunchClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onLaunchTask(task)
-  }
-
-  return (
-    <div
-      onClick={onSelect}
-      className={`p-3 rounded-lg cursor-pointer border-l-4 ${borderColor} transition-all ${
-        isSelected
-          ? 'bg-geoff-accent-dim border border-geoff-accent'
-          : 'bg-geoff-surface border border-geoff-border hover:border-geoff-border-light'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-medium text-geoff-text flex-1">{task.title}</h3>
-        <div className="flex items-center gap-2">
-          {canLaunch && (
-            <button
-              onClick={handleLaunchClick}
-              disabled={isLaunching}
-              className={`p-1 rounded transition-colors ${
-                isLaunching
-                  ? 'text-geoff-text-dim cursor-not-allowed'
-                  : 'text-geoff-accent hover:bg-geoff-accent-dim hover:text-geoff-accent'
-              }`}
-              title="Launch this task"
-            >
-              {isLaunching ? (
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </button>
-          )}
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.color}`}>
-            {config.label}
-          </span>
-        </div>
-      </div>
-
-      {task.description && (
-        <p className="text-sm text-geoff-text-muted mt-1 line-clamp-2">{task.description}</p>
-      )}
-
-      <div className="flex items-center gap-3 mt-2 text-xs text-geoff-text-dim">
-        {task.projects && (
-          <span className="px-1.5 py-0.5 bg-geoff-card rounded border border-geoff-border">
-            {task.projects.name}
-          </span>
-        )}
-        {task.priority > 0 && (
-          <span>P{task.priority}</span>
-        )}
-        {task.assigned_agent && (
-          <span className="font-mono">Agent: {task.assigned_agent.slice(0, 8)}</span>
-        )}
-        {task.progress > 0 && task.status === 'in_progress' && (
-          <span>{task.progress}%</span>
-        )}
-      </div>
-
-      {task.progress > 0 && task.status === 'in_progress' && (
-        <div className="mt-2 h-1 bg-geoff-border rounded-full overflow-hidden">
-          <div
-            className="h-full bg-geoff-accent transition-all"
-            style={{ width: `${task.progress}%` }}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
+const activeStatuses: TaskStatus[] = ['in_progress', 'assigned', 'ready', 'queued', 'blocked']
+const completedStatuses: TaskStatus[] = ['done', 'failed']
 
 interface TaskColumnProps {
   status: TaskStatus
   tasks: Task[]
-  selectedTaskId: string | null
-  onSelectTask: (id: string) => void
   onLaunchTask: (task: Task) => void
   launchingTaskId: string | null
 }
 
-function TaskColumn({ status, tasks, selectedTaskId, onSelectTask, onLaunchTask, launchingTaskId }: TaskColumnProps) {
+function TaskColumn({ status, tasks, onLaunchTask, launchingTaskId }: TaskColumnProps) {
   const config = statusConfig[status]
 
   if (tasks.length === 0) return null
@@ -142,8 +42,6 @@ function TaskColumn({ status, tasks, selectedTaskId, onSelectTask, onLaunchTask,
           <TaskItem
             key={task.id}
             task={task}
-            onSelect={() => onSelectTask(task.id)}
-            isSelected={selectedTaskId === task.id}
             onLaunchTask={onLaunchTask}
             isLaunching={launchingTaskId === task.id}
           />
@@ -153,15 +51,20 @@ function TaskColumn({ status, tasks, selectedTaskId, onSelectTask, onLaunchTask,
   )
 }
 
-export function TaskList() {
-  const { tasks, loading, error, selectedTaskId, selectTask, projectFilter } = useTasks()
+function useTaskLauncher() {
+  const { projectFilter, optimisticUpdateTask } = useTasks()
   const { launchAgent, selectAgent } = useAgents()
   const [launchingTaskId, setLaunchingTaskId] = useState<string | null>(null)
-  const groupedTasks = groupTasksByStatus(tasks)
 
   const handleLaunchTask = async (task: Task) => {
     if (launchingTaskId) return
     setLaunchingTaskId(task.id)
+
+    // Optimistically update task status immediately for instant UI feedback
+    optimisticUpdateTask(task.id, {
+      status: 'assigned',
+      assigned_agent: 'launching...'
+    })
 
     try {
       const projectPath = task.projects?.path
@@ -181,12 +84,154 @@ Be thorough and follow the task requirements.`
 
       const agent = await launchAgent(prompt, projectPath || undefined, projectId, undefined, task.title)
       if (agent) {
+        // Update with actual agent ID once launched
+        optimisticUpdateTask(task.id, { assigned_agent: agent.id })
         selectAgent(agent.id)
       }
+    } catch {
+      // On error, revert the task back to ready status
+      optimisticUpdateTask(task.id, {
+        status: 'ready',
+        assigned_agent: null
+      })
     } finally {
       setLaunchingTaskId(null)
     }
   }
+
+  return { handleLaunchTask, launchingTaskId }
+}
+
+export function ActiveTaskList() {
+  const { tasks, loading, error } = useTasks()
+  const { handleLaunchTask, launchingTaskId } = useTaskLauncher()
+  const groupedTasks = groupTasksByStatus(tasks)
+
+  const activeTasks = activeStatuses.flatMap(status => groupedTasks[status])
+  const hasActiveTasks = activeTasks.length > 0
+
+  if (loading && tasks.length === 0) {
+    return (
+      <div className="card p-8 text-center text-geoff-text-muted">
+        Loading tasks...
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="card p-4 bg-geoff-error-dim border-geoff-error text-geoff-error">
+        Error: {error}
+      </div>
+    )
+  }
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-lg font-semibold text-geoff-text">Active Tasks</h2>
+        <span className="px-2 py-0.5 rounded-full text-xs bg-geoff-accent-dim text-geoff-accent">
+          {activeTasks.length}
+        </span>
+      </div>
+
+      {!hasActiveTasks ? (
+        <div className="text-center text-geoff-text-muted py-4">
+          <p>No active tasks</p>
+          <p className="text-sm mt-1">Add a task using the form above</p>
+        </div>
+      ) : (
+        activeStatuses.map((status) => (
+          <TaskColumn
+            key={status}
+            status={status}
+            tasks={groupedTasks[status]}
+            onLaunchTask={handleLaunchTask}
+            launchingTaskId={launchingTaskId}
+          />
+        ))
+      )}
+    </div>
+  )
+}
+
+const COMPLETED_TASKS_LIMIT = 10
+
+export function CompletedTaskList() {
+  const { tasks, loading, error } = useTasks()
+  const { handleLaunchTask, launchingTaskId } = useTaskLauncher()
+  const groupedTasks = groupTasksByStatus(tasks)
+  const [expanded, setExpanded] = useState(false)
+
+  // Get all completed tasks and sort by completed_at (most recent first)
+  const allCompletedTasks = completedStatuses
+    .flatMap(status => groupedTasks[status])
+    .sort((a, b) => {
+      const dateA = a.completed_at ? new Date(a.completed_at).getTime() : 0
+      const dateB = b.completed_at ? new Date(b.completed_at).getTime() : 0
+      return dateB - dateA // Most recent first
+    })
+
+  const hasCompletedTasks = allCompletedTasks.length > 0
+  const hasMoreTasks = allCompletedTasks.length > COMPLETED_TASKS_LIMIT
+  const displayedTasks = expanded ? allCompletedTasks : allCompletedTasks.slice(0, COMPLETED_TASKS_LIMIT)
+
+  // Group displayed tasks by status for rendering
+  const displayedGrouped = completedStatuses.reduce((acc, status) => {
+    acc[status] = displayedTasks.filter(task => task.status === status)
+    return acc
+  }, {} as Record<TaskStatus, Task[]>)
+
+  if (loading && tasks.length === 0) {
+    return null // Don't show loading state for completed tasks if we're still loading
+  }
+
+  if (error) {
+    return null // Error is already shown in ActiveTaskList
+  }
+
+  if (!hasCompletedTasks) {
+    return null // Don't show empty completed section
+  }
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <h2 className="text-lg font-semibold text-geoff-text">Completed Tasks</h2>
+        <span className="px-2 py-0.5 rounded-full text-xs bg-geoff-success-dim text-geoff-success">
+          {allCompletedTasks.length}
+        </span>
+      </div>
+
+      {completedStatuses.map((status) => (
+        <TaskColumn
+          key={status}
+          status={status}
+          tasks={displayedGrouped[status]}
+          onLaunchTask={handleLaunchTask}
+          launchingTaskId={launchingTaskId}
+        />
+      ))}
+
+      {hasMoreTasks && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full mt-4 py-2 px-4 text-sm font-medium text-geoff-accent hover:text-geoff-accent-light bg-geoff-accent-dim hover:bg-geoff-accent/20 rounded-lg transition-all"
+        >
+          {expanded ? 'Show less' : `See more (${allCompletedTasks.length - COMPLETED_TASKS_LIMIT} more)`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// Keep the original TaskList for backwards compatibility
+export function TaskList() {
+  const { tasks, loading, error } = useTasks()
+  const { handleLaunchTask, launchingTaskId } = useTaskLauncher()
+  const groupedTasks = groupTasksByStatus(tasks)
+
+  const statusOrder: TaskStatus[] = ['in_progress', 'assigned', 'ready', 'queued', 'blocked', 'done', 'failed']
 
   if (loading && tasks.length === 0) {
     return (
@@ -220,8 +265,6 @@ Be thorough and follow the task requirements.`
           key={status}
           status={status}
           tasks={groupedTasks[status]}
-          selectedTaskId={selectedTaskId}
-          onSelectTask={selectTask}
           onLaunchTask={handleLaunchTask}
           launchingTaskId={launchingTaskId}
         />

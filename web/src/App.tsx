@@ -2,8 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useTasks } from './hooks/useTasks'
 import { useProjects } from './hooks/useProjects'
 import { QuickAdd } from './components/tasks/QuickAdd'
-import { TaskList } from './components/tasks/TaskList'
-import { TaskDetail } from './components/tasks/TaskDetail'
+import { ActiveTaskList, CompletedTaskList } from './components/tasks/TaskList'
 import { AgentPanel } from './components/agents/AgentPanel'
 import { ProjectSelector } from './components/projects/ProjectSelector'
 import { FileBrowser } from './components/files/FileBrowser'
@@ -22,7 +21,7 @@ const tabs: { id: Tab; label: string }[] = [
 ]
 
 function App() {
-  const { fetchTasks, subscribeToChanges, selectedTaskId, projectFilter } = useTasks()
+  const { fetchTasks, subscribeToChanges, projectFilter } = useTasks()
   const { fetchProjects } = useProjects()
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -137,19 +136,17 @@ function App() {
             {/* Project selector at top */}
             <ProjectSelector />
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Tasks column */}
-              <div className="lg:col-span-2 space-y-6">
-                <QuickAdd />
-                <TaskList />
-              </div>
+            {/* Quick add form */}
+            <QuickAdd />
 
-              {/* Right sidebar */}
-              <div className="space-y-6">
-                {selectedTaskId ? <TaskDetail /> : null}
-                <AgentPanel />
-              </div>
-            </div>
+            {/* Active tasks panel */}
+            <ActiveTaskList />
+
+            {/* Active sessions */}
+            <AgentPanel />
+
+            {/* Completed tasks panel */}
+            <CompletedTaskList />
           </div>
         )}
 

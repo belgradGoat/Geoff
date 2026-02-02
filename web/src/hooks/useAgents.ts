@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { orchestrator, Agent } from '../lib/orchestrator'
+import { useChat } from './useChat'
 
 interface AgentsState {
   agents: Agent[]
@@ -55,6 +56,12 @@ export const useAgents = create<AgentsState>((set) => ({
       set((state) => ({
         agents: state.agents.map((a) => (a.id === id ? agent : a)),
       }))
+
+      // If this agent is the current chat session, disconnect it
+      const chatState = useChat.getState()
+      if (chatState.sessionId === id) {
+        chatState.disconnectFromStoppedSession()
+      }
     } catch (e) {
       set({ error: (e as Error).message })
     }
@@ -65,7 +72,12 @@ export const useAgents = create<AgentsState>((set) => ({
   },
 
   streamAgentOutput: (id: string) => {
+    // Track if the connection has been closed to prevent state updates after unmount
+    let isClosed = false
+
     const ws = orchestrator.streamAgent(id, (message) => {
+      if (isClosed) return
+
       if (message.type === 'output' && message.data) {
         set((state) => ({
           agentOutput: {
@@ -86,7 +98,10 @@ export const useAgents = create<AgentsState>((set) => ({
     })
 
     return () => {
-      ws.close()
+      isClosed = true
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close()
+      }
     }
   },
 }))

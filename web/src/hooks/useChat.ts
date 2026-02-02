@@ -19,6 +19,7 @@ interface ChatState {
   // Actions
   startSession: (workingDir?: string) => Promise<void>
   endSession: () => void
+  disconnectFromStoppedSession: () => void
   sendMessage: (content: string) => void
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void
   appendToAssistant: (content: string) => void
@@ -98,6 +99,26 @@ export const useChat = create<ChatState>((set, get) => ({
     }
     set({ sessionId: null, isConnected: false, ws: null })
     get().addMessage({ role: 'system', content: 'Session ended.' })
+  },
+
+  // Called when the agent is stopped from AgentPanel (external disconnection)
+  disconnectFromStoppedSession: () => {
+    const { ws } = get()
+
+    // Close WebSocket if open
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      ws.close()
+    }
+
+    // Update state (don't call orchestrator.endChatSession - agent already stopped)
+    set({
+      sessionId: null,
+      isConnected: false,
+      ws: null,
+    })
+
+    // Add system message
+    get().addMessage({ role: 'system', content: 'Session ended externally.' })
   },
 
   sendMessage: (content) => {

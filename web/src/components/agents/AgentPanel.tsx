@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAgents } from '../../hooks/useAgents'
 import { Agent } from '../../lib/orchestrator'
 
@@ -20,23 +20,10 @@ function getTaskTitle(agent: Agent): string | null {
   return match ? match[1].trim() : null
 }
 
-// Format time duration from start time to now
-function formatDuration(startedAt: string): string {
+// Format start time as HH:MM timestamp
+function formatStartTime(startedAt: string): string {
   const start = new Date(startedAt)
-  const now = new Date()
-  const diffMs = now.getTime() - start.getTime()
-
-  const seconds = Math.floor(diffMs / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`
-  }
-  return `${seconds}s`
+  return start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 interface AgentItemProps {
@@ -48,15 +35,6 @@ interface AgentItemProps {
 
 function AgentItem({ agent, isSelected, onSelect, onStop }: AgentItemProps) {
   const taskTitle = getTaskTitle(agent)
-  const isRunning = agent.status === 'running' || agent.status === 'starting'
-  const [, setTick] = useState(0)
-
-  // Update duration display every second when running
-  useEffect(() => {
-    if (!isRunning) return
-    const interval = setInterval(() => setTick((t) => t + 1), 1000)
-    return () => clearInterval(interval)
-  }, [isRunning])
 
   return (
     <div
@@ -79,17 +57,12 @@ function AgentItem({ agent, isSelected, onSelect, onStop }: AgentItemProps) {
         </span>
       </div>
 
-      {/* Show task name or running duration */}
+      {/* Show task name or prompt */}
       <div className="mt-1">
         {taskTitle ? (
           <p className="text-sm text-geoff-text">
-            <span className="text-geoff-accent font-medium">Running:</span>{' '}
+            <span className="text-geoff-accent font-medium">Task:</span>{' '}
             <span className="line-clamp-1">{taskTitle}</span>
-          </p>
-        ) : isRunning ? (
-          <p className="text-sm text-geoff-text-muted">
-            <span className="text-geoff-warning">Running since:</span>{' '}
-            {formatDuration(agent.started_at)}
           </p>
         ) : (
           <p className="text-sm text-geoff-text-muted line-clamp-1">{agent.prompt}</p>
@@ -97,8 +70,9 @@ function AgentItem({ agent, isSelected, onSelect, onStop }: AgentItemProps) {
       </div>
 
       <div className="flex items-center justify-between mt-2">
-        <span className="text-xs text-geoff-text-dim">
-          {new Date(agent.started_at).toLocaleTimeString()}
+        <span className="text-xs text-geoff-text-muted">
+          <span className="text-geoff-success">Started at:</span>{' '}
+          <span className="font-medium">{formatStartTime(agent.started_at)}</span>
         </span>
         {agent.status === 'running' && (
           <button
@@ -117,14 +91,17 @@ function AgentItem({ agent, isSelected, onSelect, onStop }: AgentItemProps) {
 }
 
 function AgentOutput({ agentId }: { agentId: string }) {
-  const { agentOutput, streamAgentOutput } = useAgents()
+  const agentOutput = useAgents((state) => state.agentOutput)
+  const streamAgentOutput = useAgents((state) => state.streamAgentOutput)
   const outputRef = useRef<HTMLDivElement>(null)
   const lines = agentOutput[agentId] || []
 
   useEffect(() => {
     const unsubscribe = streamAgentOutput(agentId)
     return unsubscribe
-  }, [agentId, streamAgentOutput])
+    // streamAgentOutput is stable from zustand, only reconnect when agentId changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId])
 
   useEffect(() => {
     if (outputRef.current) {

@@ -13,6 +13,7 @@ interface TasksState {
   fetchTasks: (projectId?: string | null) => Promise<void>
   addTask: (title: string, priority?: number, description?: string, projectId?: string | null, attachments?: TaskAttachment[]) => Promise<Task | null>
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
+  optimisticUpdateTask: (id: string, updates: Partial<Task>) => void
   deleteTask: (id: string) => Promise<void>
   selectTask: (id: string | null) => void
   setProjectFilter: (projectId: string | null) => void
@@ -100,6 +101,16 @@ export const useTasks = create<TasksState>()(
     } catch (e) {
       set({ error: (e as Error).message })
     }
+  },
+
+  // Optimistic update - immediately updates local state without waiting for DB
+  // Used for immediate UI feedback when launching tasks
+  optimisticUpdateTask: (id: string, updates: Partial<Task>) => {
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === id ? { ...t, ...updates } : t
+      ),
+    }))
   },
 
   deleteTask: async (id: string) => {
