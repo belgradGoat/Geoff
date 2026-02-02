@@ -8,7 +8,8 @@ from enum import Enum
 from typing import Optional
 
 from .config import get_settings
-from .providers import ProviderType, get_provider_registry
+from typing import AsyncGenerator
+from .providers import ProviderType, get_provider_registry, ClaudeProvider
 
 
 class AgentStatus(str, Enum):
@@ -36,6 +37,8 @@ class Agent:
     error: Optional[str] = None
     output_buffer: list[str] = field(default_factory=list)
     process: Optional[asyncio.subprocess.Process] = None
+    is_chat_mode: bool = False
+    message_count: int = 0
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API response."""
@@ -252,6 +255,138 @@ class AgentManager:
         if not agent:
             return []
         return agent.output_buffer[offset : offset + limit]
+
+    async def launch_chat_agent(
+        self,
+        working_directory: Optional[str] = None,
+        provider: Optional[str] = None,
+    ) -> Agent:
+        """
+        Launch an agent in interactive chat mode.
+
+        Unlike task agents, chat agents:
+        - Don't receive an initial prompt upfront
+        - Use message-per-request model with --continue for subsequent messages
+        - Run until explicitly stopped
+
+        Args:
+            working_directory: Working directory for the agent
+            provider: Provider to use (claude, codex, gemini, opencode)
+
+        Returns:
+            The created Agent instance
+        """
+        if len(self.agents) >= self.settings.max_agents:
+            raise RuntimeError(f"Maximum number of agents ({self.settings.max_agents}) reached")
+
+        agent_id = str(uuid.uuid4())
+        working_directory = working_directory or self.settings.default_working_dir
+        provider = provider or self.settings.default_provider
+
+        agent = Agent(
+            id=agent_id,
+            prompt="[Interactive Chat Session]",
+            working_dir=working_directory,
+            provider=provider,
+            is_chat_mode=True,
+            status=AgentStatus.RUNNING,
+        )
+
+        self.agents[agent_id] = agent
+        self._output_subscribers[agent_id] = []
+
+        return agent
+
+    async def send_chat_message(
+        self, session_id: str, message: str
+    ) -> AsyncGenerator[str, None]:
+        """
+        Send a message to a chat agent and stream the response.
+
+        Uses the message-per-request model:
+        - First message: launches agent with -p <message>
+        - Subsequent messages: uses --continue -p <message>
+
+        Args:
+            session_id: The chat session ID
+            message: The user's message
+
+        Yields:
+            Output lines from the agent
+        """
+        agent = self.agents.get(session_id)
+        if not agent or not agent.is_chat_mode:
+            return
+
+        if agent.status != AgentStatus.RUNNING:
+            return
+
+        # Get provider
+        registry = get_provider_registry()
+        try:
+            provider_type = ProviderType(agent.provider)
+        except ValueError:
+            yield f"Error: Unknown provider: {agent.provider}"
+            return
+
+        provider = registry.get_provider(provider_type)
+
+        # Update command from settings if overridden
+        custom_command = self.settings.get_provider_command(agent.provider)
+        if custom_command:
+            provider.config.command = custom_command
+
+        # Build command based on message count
+        if agent.message_count == 0:
+            # First message: use build_command
+            cmd = provider.build_command(message, agent.working_dir)
+        else:
+            # Subsequent messages: use --continue (only for Claude)
+            if isinstance(provider, ClaudeProvider):
+                cmd = provider.build_continue_command(message, agent.working_dir)
+            else:
+                # Fallback for non-Claude providers
+                cmd = provider.build_command(message, agent.working_dir)
+
+        try:
+            # Run subprocess and yield output lines
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=agent.working_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+
+            agent.process = process
+            agent.pid = process.pid
+
+            while True:
+                if process.stdout is None:
+                    break
+
+                line = await process.stdout.readline()
+                if not line:
+                    break
+
+                decoded = line.decode("utf-8", errors="replace").rstrip()
+                agent.output_buffer.append(decoded)
+
+                # Notify subscribers
+                for queue in self._output_subscribers.get(agent.id, []):
+                    await queue.put(decoded)
+
+                yield decoded
+
+            # Wait for process to complete
+            await process.wait()
+            agent.exit_code = process.returncode
+
+            # Increment message count on success
+            agent.message_count += 1
+
+        except Exception as e:
+            yield f"Error: {str(e)}"
+            agent.error = str(e)
 
 
 # Global agent manager instance

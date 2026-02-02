@@ -8,6 +8,7 @@ from .api.agents import router as agents_router
 from .api.websocket import router as websocket_router
 from .api.projects import router as projects_router
 from .api.filesystem import router as filesystem_router
+from .api.chat import router as chat_router
 from .core.config import get_settings
 
 app = FastAPI(
@@ -30,6 +31,7 @@ app.include_router(agents_router)
 app.include_router(websocket_router)
 app.include_router(projects_router)
 app.include_router(filesystem_router)
+app.include_router(chat_router)
 
 
 @app.get("/health")
@@ -47,6 +49,7 @@ async def root():
         "endpoints": {
             "agents": "/api/agents",
             "projects": "/api/projects",
+            "chat": "/api/chat",
             "health": "/health",
         },
     }

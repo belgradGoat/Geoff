@@ -10,8 +10,9 @@ import { FileBrowser } from './components/files/FileBrowser'
 import { RemoteAccess } from './components/settings/RemoteAccess'
 import { ProviderSettings } from './components/settings/ProviderSettings'
 import { AllowedPathsSettings } from './components/settings/AllowedPathsSettings'
+import { AgentChat } from './components/chat/AgentChat'
 
-type Tab = 'tasks' | 'files' | 'settings'
+type Tab = 'tasks' | 'files' | 'settings' | 'chat'
 
 function App() {
   const { fetchTasks, subscribeToChanges, selectedTaskId, projectFilter } = useTasks()
@@ -81,6 +82,16 @@ function App() {
               >
                 Settings
               </button>
+              <button
+                onClick={() => setActiveTab('chat')}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                  activeTab === 'chat'
+                    ? 'bg-geoff-accent text-white'
+                    : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
+                }`}
+              >
+                Chat
+              </button>
             </nav>
           </div>
         </div>
@@ -132,6 +143,13 @@ function App() {
               <RemoteAccess />
               <AllowedPathsSettings />
             </div>
+          </div>
+        )}
+
+        {activeTab === 'chat' && (
+          <div className="space-y-6">
+            <ProjectSelector />
+            <AgentChat />
           </div>
         )}
       </main>

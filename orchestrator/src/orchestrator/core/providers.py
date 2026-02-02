@@ -51,6 +51,14 @@ class Provider(ABC):
         """Build the command line arguments for this provider."""
         pass
 
+    def build_interactive_command(self, working_dir: Optional[str] = None) -> list[str]:
+        """Build command for interactive chat mode (no prompt)."""
+        # Default implementation - override in subclasses for provider-specific behavior
+        cmd = [self.config.command]
+        if self.config.auto_approve_flag:
+            cmd.append(self.config.auto_approve_flag)
+        return cmd
+
     def get_info(self) -> ProviderInfo:
         """Get provider metadata."""
         return self.config.info
@@ -62,6 +70,22 @@ class ClaudeProvider(Provider):
     def build_command(self, prompt: str, working_dir: Optional[str] = None) -> list[str]:
         cmd = [self.config.command]
         cmd.extend([self.config.prompt_flag, prompt])
+        if self.config.auto_approve_flag:
+            cmd.append(self.config.auto_approve_flag)
+        return cmd
+
+    def build_interactive_command(self, working_dir: Optional[str] = None) -> list[str]:
+        """Build command for interactive chat mode."""
+        cmd = [self.config.command]
+        # Don't add -p flag for interactive mode
+        if self.config.auto_approve_flag:
+            cmd.append(self.config.auto_approve_flag)
+        return cmd
+
+    def build_continue_command(self, prompt: str, working_dir: Optional[str] = None) -> list[str]:
+        """Build command to continue an existing conversation."""
+        cmd = [self.config.command]
+        cmd.extend(["--continue", "-p", prompt])
         if self.config.auto_approve_flag:
             cmd.append(self.config.auto_approve_flag)
         return cmd
@@ -81,6 +105,16 @@ class CodexProvider(Provider):
             cmd.extend([self.config.working_dir_flag, working_dir])
         return cmd
 
+    def build_interactive_command(self, working_dir: Optional[str] = None) -> list[str]:
+        """Build command for interactive chat mode."""
+        cmd = [self.config.command]
+        # Don't use "exec" subcommand for interactive mode
+        if self.config.auto_approve_flag:
+            cmd.append(self.config.auto_approve_flag)
+        if working_dir and self.config.working_dir_flag:
+            cmd.extend([self.config.working_dir_flag, working_dir])
+        return cmd
+
 
 class GeminiProvider(Provider):
     """Google Gemini CLI provider."""
@@ -89,6 +123,11 @@ class GeminiProvider(Provider):
         cmd = [self.config.command]
         cmd.extend([self.config.prompt_flag, prompt])
         return cmd
+
+    def build_interactive_command(self, working_dir: Optional[str] = None) -> list[str]:
+        """Build command for interactive chat mode."""
+        # Gemini CLI runs in interactive mode by default without -p flag
+        return [self.config.command]
 
 
 class OpenCodeProvider(Provider):
@@ -100,6 +139,11 @@ class OpenCodeProvider(Provider):
         if self.config.quiet_flag:
             cmd.append(self.config.quiet_flag)
         return cmd
+
+    def build_interactive_command(self, working_dir: Optional[str] = None) -> list[str]:
+        """Build command for interactive chat mode."""
+        # OpenCode runs in interactive mode by default without -p flag
+        return [self.config.command]
 
 
 # Provider configurations
