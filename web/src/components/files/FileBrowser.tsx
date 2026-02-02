@@ -103,6 +103,8 @@ export function FileBrowser() {
   const [selectedFile, setSelectedFile] = useState<FileContentResponse | null>(null)
   const [fileLoading, setFileLoading] = useState(false)
   const [stats, setStats] = useState({ files: 0, dirs: 0 })
+  const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState(false)
 
   // Create folder state
   const [showCreateFolder, setShowCreateFolder] = useState(false)
@@ -162,6 +164,49 @@ export function FileBrowser() {
   const toggleHidden = () => {
     setShowHidden(!showHidden)
     setTimeout(() => browse(currentPath), 0)
+  }
+
+  const copyPath = async () => {
+    if (!currentPath) return
+    setCopyError(false)
+
+    // Try modern Clipboard API first
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(currentPath)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+        return
+      } catch (e) {
+        console.warn('Clipboard API failed, trying fallback:', e)
+      }
+    }
+
+    // Fallback for non-secure contexts (HTTP) or older browsers
+    try {
+      const textArea = document.createElement('textarea')
+      textArea.value = currentPath
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-9999px'
+      textArea.style.top = '-9999px'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+
+      const successful = document.execCommand('copy')
+      document.body.removeChild(textArea)
+
+      if (successful) {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } else {
+        throw new Error('execCommand returned false')
+      }
+    } catch (e) {
+      console.error('Failed to copy path:', e)
+      setCopyError(true)
+      setTimeout(() => setCopyError(false), 2000)
+    }
   }
 
   const handleCreateFolder = async () => {
@@ -318,7 +363,32 @@ export function FileBrowser() {
           <span className="text-sm text-geoff-text truncate flex-1 font-mono" title={currentPath}>
             {currentPath}
           </span>
-          <span className="text-xs text-geoff-text-dim">
+          <button
+            onClick={copyPath}
+            className={`p-1.5 rounded transition-colors shrink-0 ${
+              copied
+                ? 'bg-geoff-success-dim text-geoff-success'
+                : copyError
+                ? 'bg-geoff-error-dim text-geoff-error'
+                : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-card'
+            }`}
+            title={copied ? 'Copied!' : copyError ? 'Failed to copy' : 'Copy path'}
+          >
+            {copied ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : copyError ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            )}
+          </button>
+          <span className="text-xs text-geoff-text-dim hidden sm:inline">
             {stats.dirs} folders, {stats.files} files
           </span>
         </div>

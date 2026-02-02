@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { supabase, Task, TaskStatus } from '../lib/supabase'
+import { persist } from 'zustand/middleware'
+import { supabase, Task, TaskStatus, TaskAttachment } from '../lib/supabase'
 
 interface TasksState {
   tasks: Task[]
@@ -10,7 +11,7 @@ interface TasksState {
 
   // Actions
   fetchTasks: (projectId?: string | null) => Promise<void>
-  addTask: (title: string, priority?: number, description?: string, projectId?: string | null) => Promise<Task | null>
+  addTask: (title: string, priority?: number, description?: string, projectId?: string | null, attachments?: TaskAttachment[]) => Promise<Task | null>
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   selectTask: (id: string | null) => void
@@ -18,7 +19,9 @@ interface TasksState {
   subscribeToChanges: () => () => void
 }
 
-export const useTasks = create<TasksState>((set, get) => ({
+export const useTasks = create<TasksState>()(
+  persist(
+    (set, get) => ({
   tasks: [],
   loading: false,
   error: null,
@@ -49,7 +52,7 @@ export const useTasks = create<TasksState>((set, get) => ({
     }
   },
 
-  addTask: async (title: string, priority = 0, description?: string, projectId?: string | null) => {
+  addTask: async (title: string, priority = 0, description?: string, projectId?: string | null, attachments?: TaskAttachment[]) => {
     try {
       const currentProjectFilter = get().projectFilter
       const taskProjectId = projectId !== undefined ? projectId : currentProjectFilter
@@ -62,6 +65,7 @@ export const useTasks = create<TasksState>((set, get) => ({
           description,
           status: 'ready' as TaskStatus,
           project_id: taskProjectId,
+          attachments: attachments || [],
         })
         .select('*, projects(id, name, path)')
         .single()
@@ -175,7 +179,15 @@ export const useTasks = create<TasksState>((set, get) => ({
       supabase.removeChannel(channel)
     }
   },
-}))
+    }),
+    {
+      name: 'tasks-storage',
+      partialize: (state) => ({
+        projectFilter: state.projectFilter,
+      }),
+    }
+  )
+)
 
 // Helper to group tasks by status
 export function groupTasksByStatus(tasks: Task[]): Record<TaskStatus, Task[]> {

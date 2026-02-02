@@ -24,10 +24,40 @@ export function RemoteAccess() {
     }
   }
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
-    setCopied(label)
-    setTimeout(() => setCopied(null), 2000)
+  const copyToClipboard = async (text: string, label: string) => {
+    // Try modern Clipboard API first
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(text)
+        setCopied(label)
+        setTimeout(() => setCopied(null), 2000)
+        return
+      } catch (e) {
+        console.warn('Clipboard API failed, trying fallback:', e)
+      }
+    }
+
+    // Fallback for non-secure contexts (HTTP) or older browsers
+    try {
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-9999px'
+      textArea.style.top = '-9999px'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+
+      const successful = document.execCommand('copy')
+      document.body.removeChild(textArea)
+
+      if (successful) {
+        setCopied(label)
+        setTimeout(() => setCopied(null), 2000)
+      }
+    } catch (e) {
+      console.error('Failed to copy:', e)
+    }
   }
 
   if (loading) {

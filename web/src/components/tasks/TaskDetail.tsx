@@ -1,9 +1,68 @@
 import { useState, useEffect } from 'react'
 import { useTasks } from '../../hooks/useTasks'
-import { Task, TaskStatus, TaskComplexity } from '../../lib/supabase'
+import { Task, TaskStatus, TaskComplexity, TaskAttachment } from '../../lib/supabase'
 
 const statusOptions: TaskStatus[] = ['queued', 'ready', 'assigned', 'in_progress', 'done', 'failed', 'blocked']
 const complexityOptions: TaskComplexity[] = ['trivial', 'small', 'medium', 'large', 'unknown']
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function AttachmentPreview({ attachment }: { attachment: TaskAttachment }) {
+  const [expanded, setExpanded] = useState(false)
+  const isImage = attachment.type.startsWith('image/')
+  const isText = attachment.type.startsWith('text/') || attachment.type === 'application/json'
+
+  const dataUrl = `data:${attachment.type};base64,${attachment.data}`
+
+  return (
+    <div className="border border-geoff-border rounded-lg overflow-hidden">
+      <div
+        className="flex items-center justify-between p-2 bg-geoff-surface cursor-pointer hover:bg-geoff-card transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm">
+            {isImage ? '🖼️' : attachment.type === 'application/pdf' ? '📄' : '📎'}
+          </span>
+          <span className="text-sm text-geoff-text truncate max-w-[200px]">{attachment.name}</span>
+          <span className="text-xs text-geoff-text-dim">{formatFileSize(attachment.size)}</span>
+        </div>
+        <svg
+          className={`w-4 h-4 text-geoff-text-dim transition-transform ${expanded ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      {expanded && (
+        <div className="p-2 bg-geoff-bg">
+          {isImage && (
+            <img src={dataUrl} alt={attachment.name} className="max-w-full max-h-64 object-contain mx-auto" />
+          )}
+          {isText && (
+            <pre className="text-xs text-geoff-text font-mono whitespace-pre-wrap max-h-48 overflow-auto p-2 bg-geoff-surface rounded">
+              {atob(attachment.data)}
+            </pre>
+          )}
+          {!isImage && !isText && (
+            <div className="text-center py-4 text-geoff-text-muted text-sm">
+              Preview not available.{' '}
+              <a href={dataUrl} download={attachment.name} className="text-geoff-accent hover:underline">
+                Download
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function TaskDetail() {
   const { tasks, selectedTaskId, selectTask, updateTask, deleteTask } = useTasks()
@@ -191,6 +250,20 @@ export function TaskDetail() {
               </div>
             )}
           </div>
+
+          {/* Attachments */}
+          {task.attachments && task.attachments.length > 0 && (
+            <div className="pt-4 border-t border-geoff-border">
+              <h3 className="text-sm font-medium text-geoff-text-muted mb-2">
+                Attachments ({task.attachments.length})
+              </h3>
+              <div className="space-y-2">
+                {task.attachments.map((attachment, index) => (
+                  <AttachmentPreview key={index} attachment={attachment} />
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="text-xs text-geoff-text-dim pt-4 border-t border-geoff-border">
             <div>Created: {new Date(task.created_at).toLocaleString()}</div>

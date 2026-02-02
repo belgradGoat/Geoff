@@ -69,7 +69,7 @@ Your Phone                         Your Mac (at home)
 
 2. **Set up Supabase**
    - Create a project at supabase.com
-   - Run the SQL files in `supabase/migrations/` in order (001-004)
+   - Copy `supabase/schema.sql` into the SQL Editor and run it
    - Copy credentials to `.env`
 
 3. **Install MCP Server**

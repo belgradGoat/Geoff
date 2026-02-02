@@ -194,6 +194,39 @@ def list_tasks(
     return {"tasks": result.data, "count": len(result.data)}
 
 
+def _format_attachments_for_agent(attachments: list) -> list:
+    """Format attachments for agent consumption - decode text, summarize binary."""
+    import base64
+
+    if not attachments:
+        return []
+
+    formatted = []
+    for att in attachments:
+        item = {
+            "name": att.get("name", "unknown"),
+            "type": att.get("type", "application/octet-stream"),
+            "size": att.get("size", 0),
+        }
+
+        # Decode text content for easy reading
+        if att.get("type", "").startswith("text/") or att.get("type") == "application/json":
+            try:
+                item["content"] = base64.b64decode(att.get("data", "")).decode("utf-8")
+            except:
+                item["content"] = "[Could not decode text content]"
+        elif att.get("type", "").startswith("image/"):
+            # Keep base64 for images - Claude can process these
+            item["image_base64"] = att.get("data", "")
+            item["note"] = "Image attached - base64 encoded"
+        else:
+            item["note"] = f"Binary file attached ({att.get('type')})"
+
+        formatted.append(item)
+
+    return formatted
+
+
 def get_task(task_id: str) -> dict:
     """
     Get a specific task by ID.
@@ -202,7 +235,7 @@ def get_task(task_id: str) -> dict:
         task_id: The UUID of the task
 
     Returns:
-        Task details including logs, subtasks, and project info
+        Task details including logs, subtasks, project info, and formatted attachments
     """
     db = get_db()
 
@@ -228,8 +261,13 @@ def get_task(task_id: str) -> dict:
         .execute()
     )
 
+    # Format attachments for agent
+    task_data = task_result.data
+    if task_data and task_data.get("attachments"):
+        task_data["attachments_formatted"] = _format_attachments_for_agent(task_data["attachments"])
+
     return {
-        "task": task_result.data,
+        "task": task_data,
         "logs": logs_result.data,
         "subtasks": subtasks_result.data,
     }

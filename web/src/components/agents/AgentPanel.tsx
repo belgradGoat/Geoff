@@ -115,12 +115,27 @@ export function AgentPanel() {
     return () => clearInterval(interval)
   }, [fetchAgents])
 
+  const getDefaultPrompt = () => {
+    const projectContext = selectedProject
+      ? `Filter tasks to project_id "${projectFilter}".`
+      : ''
+
+    return `You have access to the agent-task-planner MCP server. Use it to:
+1. Call task_get_ready to find tasks that are ready to be worked on. ${projectContext}
+2. Pick the highest priority task and call task_claim with your agent ID to claim it.
+3. Read the task title, description, and any attachments to understand what needs to be done.
+4. Complete the work described in the task.
+5. Call task_complete when done, or task_fail if you encounter an issue.
+
+Work through one task at a time. Be thorough and follow the task requirements.`
+  }
+
   const handleLaunch = async () => {
-    if (!prompt.trim()) return
     setIsLaunching(true)
     try {
+      const finalPrompt = prompt.trim() || getDefaultPrompt()
       const agent = await launchAgent(
-        prompt.trim(),
+        finalPrompt,
         workingDir || undefined,
         projectFilter || undefined
       )
@@ -145,7 +160,7 @@ export function AgentPanel() {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Enter prompt for the agent..."
+          placeholder="Custom prompt (optional) - leave empty to work on ready tasks by priority"
           rows={2}
           className="input resize-none"
         />
@@ -156,7 +171,7 @@ export function AgentPanel() {
             </div>
             <button
               onClick={handleLaunch}
-              disabled={isLaunching || !prompt.trim()}
+              disabled={isLaunching}
               className="btn-primary"
             >
               {isLaunching ? 'Launching...' : 'Launch'}
@@ -173,7 +188,7 @@ export function AgentPanel() {
             />
             <button
               onClick={handleLaunch}
-              disabled={isLaunching || !prompt.trim()}
+              disabled={isLaunching}
               className="btn-primary"
             >
               {isLaunching ? 'Launching...' : 'Launch'}

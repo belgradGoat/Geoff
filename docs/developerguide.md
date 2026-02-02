@@ -71,6 +71,7 @@ Primary table for task management.
 | `complexity` | task_complexity | Estimated complexity |
 | `priority` | INTEGER | Priority level (0-4) |
 | `parent_id` | UUID | Parent task for subtasks |
+| `project_id` | UUID | Associated project (FK to projects) |
 | `depends_on` | UUID[] | Array of dependency task IDs |
 | `assigned_agent` | TEXT | Agent ID if claimed |
 | `progress` | INTEGER | 0-100 completion percentage |
@@ -80,10 +81,26 @@ Primary table for task management.
 | `max_retries` | INTEGER | Maximum retry attempts |
 | `context` | JSONB | Arbitrary context data |
 | `tags` | TEXT[] | Categorization tags |
+| `attachments` | JSONB | File attachments (base64 encoded) |
 | `estimated_minutes` | INTEGER | Estimated time |
 | `actual_minutes` | INTEGER | Actual time (auto-calculated) |
 | `started_at` | TIMESTAMPTZ | When work began |
 | `completed_at` | TIMESTAMPTZ | When completed/failed |
+| `created_at` | TIMESTAMPTZ | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last update timestamp |
+
+#### `projects`
+
+Project definitions for multi-project support.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `name` | TEXT | Project display name |
+| `path` | TEXT | Filesystem path (unique) |
+| `description` | TEXT | Optional description |
+| `is_active` | BOOLEAN | Show in project selectors |
+| `settings` | JSONB | Custom project settings |
 | `created_at` | TIMESTAMPTZ | Creation timestamp |
 | `updated_at` | TIMESTAMPTZ | Last update timestamp |
 
@@ -147,13 +164,22 @@ When a task is marked `done`, checks all `queued` tasks that depend on it. If al
 ### Indexes
 
 ```sql
+-- Tasks
 CREATE INDEX idx_tasks_status ON tasks(status);
 CREATE INDEX idx_tasks_priority ON tasks(priority DESC);
 CREATE INDEX idx_tasks_parent_id ON tasks(parent_id);
+CREATE INDEX idx_tasks_project_id ON tasks(project_id);
 CREATE INDEX idx_tasks_assigned_agent ON tasks(assigned_agent);
 CREATE INDEX idx_tasks_created_at ON tasks(created_at DESC);
+CREATE INDEX idx_tasks_has_attachments ON tasks ((attachments != '[]'::jsonb));
+
+-- Task logs
 CREATE INDEX idx_task_logs_task_id ON task_logs(task_id);
 CREATE INDEX idx_task_logs_created_at ON task_logs(created_at DESC);
+
+-- Projects
+CREATE INDEX idx_projects_is_active ON projects(is_active);
+CREATE INDEX idx_projects_path ON projects(path);
 ```
 
 ---
@@ -214,7 +240,8 @@ If no rows are updated, the claim failed (task was already claimed or not ready)
 
 ```bash
 cd mcp-server
-pip install -e .
+uv venv && source .venv/bin/activate
+uv pip install -e .
 python -m agent_task_planner.server
 ```
 
@@ -228,9 +255,10 @@ agent-task-planner
 The MCP server must be registered with Claude Code CLI. **Use `--scope user`** so that agents spawned by the orchestrator can also access the MCP tools:
 
 ```bash
+# Run from the project root directory
 claude mcp add-json --scope user agent-task-planner '{
   "type": "stdio",
-  "command": "/absolute/path/to/env/bin/python",
+  "command": "'$(pwd)'/mcp-server/.venv/bin/python",
   "args": ["-m", "agent_task_planner.server"],
   "env": {
     "SUPABASE_URL": "https://your-project.supabase.co",
@@ -241,14 +269,13 @@ claude mcp add-json --scope user agent-task-planner '{
 
 **Critical requirements:**
 
-1. **Absolute Python path**: You must use the full path to the Python executable in your virtual environment. Using just `python` or `python3` will fail because Claude Code spawns a new shell without your virtual environment activated.
+1. **Absolute Python path**: Use the full path to the Python executable in your virtual environment. The `$(pwd)` shell expansion works when running from the project root.
 
 2. **User scope**: The `--scope user` flag is essential for the orchestrator workflow. When the orchestrator spawns a Claude agent, that agent needs access to the MCP tools. User-scoped MCP servers are available to all Claude instances on the machine.
 
-To find your Python path:
+To verify your Python path:
 ```bash
-source /path/to/env/bin/activate
-which python
+cd mcp-server && source .venv/bin/activate && which python
 # Use this output as the "command" value
 ```
 
@@ -277,7 +304,7 @@ MCP configurations are stored in `~/.claude.json`. User-scoped servers appear in
   "mcpServers": {
     "agent-task-planner": {
       "type": "stdio",
-      "command": "/path/to/env/bin/python",
+      "command": "/path/to/AgentTaskPlanner/mcp-server/.venv/bin/python",
       "args": ["-m", "agent_task_planner.server"],
       "env": {
         "SUPABASE_URL": "...",
@@ -498,7 +525,7 @@ VITE_ORCHESTRATOR_API_KEY=secret
 
 ### Adding New Task Fields
 
-1. Add column to `001_initial_schema.sql`:
+1. Add column to `supabase/schema.sql` and run in Supabase SQL Editor:
    ```sql
    ALTER TABLE tasks ADD COLUMN my_field TEXT;
    ```
@@ -557,7 +584,7 @@ Modify `AgentManager._run_agent()` to customize:
 
 1. Check `.env` file exists and has valid credentials
 2. Verify Supabase project is accessible
-3. Check Python dependencies: `pip install -e .`
+3. Check Python dependencies: `cd mcp-server && uv pip install -e .`
 
 ### Tasks Not Syncing
 
@@ -579,8 +606,8 @@ Modify `AgentManager._run_agent()` to customize:
 
 ### Database Migration Errors
 
-1. Run migrations in order (001, 002, 003)
-2. Check for existing objects that conflict
+1. Run the complete `supabase/schema.sql` file in Supabase SQL Editor
+2. Check for existing objects that conflict (drop them first if re-running)
 3. Use `DROP TYPE IF EXISTS` for enum changes
 
 ### Common Error Messages

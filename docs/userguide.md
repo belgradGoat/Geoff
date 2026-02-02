@@ -53,23 +53,21 @@ This guide covers how to use Geoff for managing tasks and orchestrating Claude a
    | `ORCHESTRATOR_PORT` | Port for the orchestrator | `8080` |
    | `TAILSCALE_IP` | Your Tailscale IP for remote access | (auto-detected) |
 
-2. **Run Database Migrations**
+2. **Run Database Schema**
 
-   In your Supabase SQL Editor, run each migration file in order:
-   - `001_initial_schema.sql` - Creates tables and indexes
-   - `002_rls_policies.sql` - Sets up row-level security
-   - `003_triggers.sql` - Adds automatic behaviors
-   - `004_projects.sql` - Adds multi-project support
+   In your Supabase SQL Editor:
+   1. Open `supabase/schema.sql`
+   2. Copy the entire contents
+   3. Paste into the SQL Editor and click "Run"
+
+   This single file creates all tables, indexes, triggers, and RLS policies.
 
 3. **Install the MCP Server**
 
-   Create and activate a virtual environment, then install the MCP server:
    ```bash
-   cd /path/to/AgentTaskPlanner
-   python3 -m venv env
-   source env/bin/activate
    cd mcp-server
-   pip install -e .
+   uv venv && source .venv/bin/activate
+   uv pip install -e .
    ```
 
 4. **Add MCP Server to Claude Code**
@@ -79,7 +77,7 @@ This guide covers how to use Geoff for managing tasks and orchestrating Claude a
    ```bash
    claude mcp add-json --scope user agent-task-planner '{
      "type": "stdio",
-     "command": "/path/to/AgentTaskPlanner/env/bin/python",
+     "command": "'$(pwd)'/mcp-server/.venv/bin/python",
      "args": ["-m", "agent_task_planner.server"],
      "env": {
        "SUPABASE_URL": "https://your-project.supabase.co",
@@ -89,8 +87,8 @@ This guide covers how to use Geoff for managing tasks and orchestrating Claude a
    ```
 
    **Important notes:**
-   - Replace `/path/to/AgentTaskPlanner` with your actual project path
-   - Use the **full absolute path** to your virtual environment's Python
+   - Run this from the project root directory (the `$(pwd)` expands to your current path)
+   - Or replace `$(pwd)` with the full absolute path to your AgentTaskPlanner directory
    - The `--scope user` flag is critical for orchestrator-spawned agents to access the MCP tools
 
    Verify the server is connected:
@@ -100,7 +98,7 @@ This guide covers how to use Geoff for managing tasks and orchestrating Claude a
 
    You should see:
    ```
-   agent-task-planner: /path/to/.../env/bin/python -m agent_task_planner.server - ✓ Connected
+   agent-task-planner: /path/to/.../mcp-server/.venv/bin/python -m agent_task_planner.server - ✓ Connected
    ```
 
    Inside Claude Code, use `/mcp` to check server status.
@@ -802,7 +800,7 @@ Tailscale already encrypts all traffic, so HTTPS is not needed.
 
 #### "Could not find relationship between 'tasks' and 'projects'"
 
-Run the `004_projects.sql` migration in your Supabase SQL Editor.
+If you set up the database before the projects feature was added, run the full `supabase/schema.sql` again, or manually run just the projects section from it.
 
 #### "Agent failed to start" or "claude: command not found"
 
@@ -821,7 +819,7 @@ Run the `004_projects.sql` migration in your Supabase SQL Editor.
 2. Verify the Python path in MCP config points to your virtual environment
 3. Test the MCP server directly:
    ```bash
-   /path/to/env/bin/python -m agent_task_planner.server
+   cd mcp-server && .venv/bin/python -m agent_task_planner.server
    ```
 
 ---

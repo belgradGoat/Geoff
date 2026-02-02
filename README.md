@@ -61,7 +61,11 @@ cp .env.example .env
 
 ### 2. Set up the database
 
-Run the SQL files in `supabase/migrations/` in your Supabase SQL editor (in order: 001, 002, 003, 004).
+1. Go to your Supabase project → SQL Editor
+2. Copy the contents of `supabase/schema.sql`
+3. Paste and run it
+
+That's it - one file sets up everything (tables, indexes, triggers, RLS policies).
 
 ### 3. Install and register the MCP server
 

@@ -37,9 +37,7 @@ function App() {
             <div className="flex items-center gap-4">
               {/* Logo */}
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-geoff-accent flex items-center justify-center">
-                  <span className="text-white font-bold text-xl">G</span>
-                </div>
+                <img src="/logo.png" alt="Geoff" className="w-10 h-10 rounded-xl" />
                 <div>
                   <h1 className="text-xl font-bold text-geoff-text">Geoff</h1>
                   {selectedProject && (
@@ -88,39 +86,47 @@ function App() {
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         {activeTab === 'tasks' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Tasks column */}
-            <div className="lg:col-span-2 space-y-6">
-              <QuickAdd />
-              <TaskList />
-            </div>
+          <div className="space-y-6">
+            {/* Project selector at top */}
+            <ProjectSelector />
 
-            {/* Right sidebar */}
-            <div className="space-y-6">
-              <ProjectSelector />
-              {selectedTaskId ? <TaskDetail /> : null}
-              <AgentPanel />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Tasks column */}
+              <div className="lg:col-span-2 space-y-6">
+                <QuickAdd />
+                <TaskList />
+              </div>
+
+              {/* Right sidebar */}
+              <div className="space-y-6">
+                {selectedTaskId ? <TaskDetail /> : null}
+                <AgentPanel />
+              </div>
             </div>
           </div>
         )}
 
         {activeTab === 'files' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <FileBrowser />
-            </div>
-            <div className="space-y-6">
-              <ProjectSelector />
-              <AgentPanel />
+          <div className="space-y-6">
+            <ProjectSelector />
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <FileBrowser />
+              </div>
+              <div className="space-y-6">
+                <AgentPanel />
+              </div>
             </div>
           </div>
         )}
 
         {activeTab === 'settings' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <RemoteAccess />
-            <div className="space-y-6">
-              <ProjectSelector />
+          <div className="space-y-6">
+            <ProjectSelector />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <RemoteAccess />
             </div>
           </div>
         )}
