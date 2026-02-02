@@ -26,7 +26,7 @@ It lets you:
 - **Launch AI agents** to work on those tasks
 - **Check progress remotely** and see what got done
 
-Your limited time should be spent on the product design and things you enjoy in life, not boilerplate. Let AI handle the boring stuff while you're stuck in meetings.
+Your limited time should be spent on the product design and things you enjoy in life, Agents should do the work. Let AI handle the development while you focus on what's important.
 
 ---
 
