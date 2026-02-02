@@ -109,15 +109,15 @@ For remote access from your phone, use your Tailscale IP (shown after setup).
 
 ## Who is this for?
 
-- Solo developers with day jobs
+- Vibe Coders with day jobs
 - Parents who code after the kids are asleep
-- Anyone whose hobby time is precious
+- Anyone whose time is precious
 - People who think about their side projects at work and forget by evening
 
 This is **not** for:
 - Teams or companies (no multi-user features)
 - People who want a polished commercial product
-- Anyone who needs uptime guarantees
+- People who are new to Ai assisted coding
 
 ---
 
