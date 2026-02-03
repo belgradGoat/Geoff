@@ -7,11 +7,13 @@ export function AgentChat() {
   const {
     messages,
     isConnected,
+    isReconnecting,
     isTyping,
     sendMessage,
     startSession,
     endSession,
-    pendingAssistantMessage
+    pendingAssistantMessage,
+    setupVisibilityListener
   } = useChat()
 
   const { projectFilter } = useTasks()
@@ -25,6 +27,12 @@ export function AgentChat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, pendingAssistantMessage])
+
+  // Setup visibility change listener on mount
+  useEffect(() => {
+    const cleanup = setupVisibilityListener()
+    return cleanup
+  }, [setupVisibilityListener])
 
   const handleSend = () => {
     if (!input.trim()) return
@@ -46,10 +54,14 @@ export function AgentChat() {
         <h2 className="text-lg font-semibold text-geoff-text">Agent Chat</h2>
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${
-            isConnected ? 'bg-geoff-success' : 'bg-geoff-error'
+            isConnected ? 'bg-geoff-success' :
+            isReconnecting ? 'bg-yellow-500 animate-pulse' :
+            'bg-geoff-error'
           }`} />
           <span className="text-sm text-geoff-text-muted">
-            {isConnected ? 'Connected' : 'Disconnected'}
+            {isConnected ? 'Connected' :
+             isReconnecting ? 'Reconnecting...' :
+             'Disconnected'}
           </span>
           {!isConnected ? (
             <button

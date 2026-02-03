@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import asyncio
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +33,29 @@ app.include_router(websocket_router)
 app.include_router(projects_router)
 app.include_router(filesystem_router)
 app.include_router(chat_router)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize background tasks on application startup."""
+    from .core.agent_manager import get_agent_manager
+    manager = get_agent_manager()
+    await manager.start_cleanup_task()
+    print("[STARTUP] Background cleanup task started")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up on application shutdown."""
+    from .core.agent_manager import get_agent_manager
+    manager = get_agent_manager()
+    if manager._cleanup_task:
+        manager._cleanup_task.cancel()
+        try:
+            await manager._cleanup_task
+        except asyncio.CancelledError:
+            pass
+    print("[SHUTDOWN] Cleanup task stopped")
 
 
 @app.get("/health")

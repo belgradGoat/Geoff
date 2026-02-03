@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     max_agents: int = 10
     agent_timeout: int = 3600  # 1 hour default timeout
 
+    # Session Management Configuration
+    session_temp_disconnect_timeout: int = int(os.getenv("SESSION_TEMP_DISCONNECT_TIMEOUT", "900"))  # 15 minutes
+    session_abandoned_timeout: int = int(os.getenv("SESSION_ABANDONED_TIMEOUT", "3600"))  # 1 hour
+    session_cleanup_interval: int = int(os.getenv("SESSION_CLEANUP_INTERVAL", "300"))  # 5 minutes
+    session_max_reconnections: int = int(os.getenv("SESSION_MAX_RECONNECTIONS", "50"))  # Generous for mobile
+
     # Supabase Configuration (for project lookups)
     supabase_url: str = os.getenv("SUPABASE_URL", "")
     supabase_service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")

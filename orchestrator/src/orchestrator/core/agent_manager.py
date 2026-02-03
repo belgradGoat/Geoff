@@ -45,6 +45,11 @@ class Agent:
     is_chat_mode: bool = False
     message_count: int = 0
     task_title: Optional[str] = None  # Friendly display name for the task
+    # Session management fields
+    last_activity_at: datetime = field(default_factory=utcnow)
+    websocket_connected: bool = False
+    disconnect_count: int = 0
+    marked_for_cleanup: bool = False
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API response."""
@@ -71,6 +76,7 @@ class AgentManager:
         self.agents: dict[str, Agent] = {}
         self.settings = get_settings()
         self._output_subscribers: dict[str, list[asyncio.Queue]] = {}
+        self._cleanup_task: Optional[asyncio.Task] = None
 
     async def launch_agent(
         self,
@@ -216,6 +222,12 @@ class AgentManager:
             # Always update status for running agents (including chat mode with no process)
             agent.status = AgentStatus.STOPPED
             agent.stopped_at = utcnow()
+            agent.last_activity_at = utcnow()
+            agent.websocket_connected = False
+
+            # Mark non-chat agents for immediate cleanup after grace period
+            if not agent.is_chat_mode:
+                agent.marked_for_cleanup = True
 
         return agent
 
@@ -334,6 +346,10 @@ class AgentManager:
         if agent.status != AgentStatus.RUNNING:
             return
 
+        # Update activity timestamp on message send
+        agent.last_activity_at = utcnow()
+        agent.marked_for_cleanup = False  # Un-mark if was marked
+
         # Get provider
         registry = get_provider_registry()
         try:
@@ -396,10 +412,73 @@ class AgentManager:
 
             # Increment message count on success
             agent.message_count += 1
+            agent.last_activity_at = utcnow()  # Update activity after completion
 
         except Exception as e:
             yield f"Error: {str(e)}"
             agent.error = str(e)
+
+    async def start_cleanup_task(self) -> None:
+        """Start the background cleanup task if not already running."""
+        if self._cleanup_task is None or self._cleanup_task.done():
+            self._cleanup_task = asyncio.create_task(self._cleanup_abandoned_sessions())
+
+    async def _cleanup_abandoned_sessions(self) -> None:
+        """
+        Background task to clean up abandoned chat sessions.
+
+        Runs periodically to identify and remove sessions that:
+        1. Have been disconnected longer than temp_disconnect_timeout
+        2. Have exceeded abandoned_timeout with no activity
+        3. Are stopped task agents (non-chat)
+
+        Two-phase cleanup:
+        - Phase 1: Mark sessions exceeding temp_disconnect_timeout
+        - Phase 2: Remove sessions exceeding abandoned_timeout or stopped tasks
+        """
+        settings = self.settings
+
+        while True:
+            try:
+                await asyncio.sleep(settings.session_cleanup_interval)
+
+                now = utcnow()
+                agents_to_cleanup = []
+
+                for agent_id, agent in list(self.agents.items()):
+                    # Calculate inactivity duration
+                    inactive_duration = (now - agent.last_activity_at).total_seconds()
+
+                    # CASE 1: Task agents that have finished - cleanup after grace period
+                    if not agent.is_chat_mode and agent.status in (AgentStatus.STOPPED, AgentStatus.FAILED):
+                        # Only cleanup after temp disconnect timeout (give time for output streaming)
+                        if inactive_duration > settings.session_temp_disconnect_timeout:
+                            agents_to_cleanup.append(agent_id)
+                            continue
+
+                    # CASE 2: Chat sessions - graceful two-phase cleanup
+                    if agent.is_chat_mode:
+                        # Phase 1: Mark disconnected sessions exceeding temp timeout
+                        if not agent.websocket_connected and inactive_duration > settings.session_temp_disconnect_timeout:
+                            agent.marked_for_cleanup = True
+
+                        # Phase 2: Remove marked sessions exceeding abandoned timeout OR stopped sessions
+                        if (agent.marked_for_cleanup and inactive_duration > settings.session_abandoned_timeout) or \
+                           (agent.status == AgentStatus.STOPPED and inactive_duration > settings.session_temp_disconnect_timeout):
+                            agents_to_cleanup.append(agent_id)
+
+                # Perform cleanup - FIX MEMORY LEAK: Actually remove from dict
+                for agent_id in agents_to_cleanup:
+                    agent = self.agents.pop(agent_id, None)  # Remove from dict
+                    if agent:
+                        # Clean up subscribers
+                        self._output_subscribers.pop(agent_id, None)
+                        inactive_time = (now - agent.last_activity_at).total_seconds()
+                        print(f"[CLEANUP] Removed abandoned session: {agent_id} (inactive: {inactive_time:.0f}s, chat_mode: {agent.is_chat_mode})")
+
+            except Exception as e:
+                print(f"[ERROR] Cleanup task error: {e}")
+                await asyncio.sleep(60)  # Back off on error
 
 
 # Global agent manager instance

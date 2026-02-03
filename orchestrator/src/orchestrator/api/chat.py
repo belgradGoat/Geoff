@@ -66,6 +66,36 @@ async def end_chat_session(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
 
+@router.get("/sessions/{session_id}/status")
+async def get_chat_session_status(
+    session_id: str,
+    _: str = Depends(verify_api_key),
+    manager: AgentManager = Depends(get_agent_manager),
+):
+    """
+    Get status of a chat session to check if reconnection is possible.
+
+    Returns:
+        - 200: Session exists and is active (can reconnect)
+        - 404: Session not found or cleaned up
+        - 410: Session stopped by user
+    """
+    agent = manager.get_agent(session_id)
+    if not agent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    if agent.status == AgentStatus.STOPPED:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Session was stopped")
+
+    return {
+        "id": agent.id,
+        "status": agent.status.value,
+        "connected": agent.websocket_connected,
+        "message_count": agent.message_count,
+        "last_activity": agent.last_activity_at.isoformat(),
+    }
+
+
 @router.websocket("/sessions/{session_id}/ws")
 async def chat_websocket(
     websocket: WebSocket,
@@ -106,6 +136,22 @@ async def chat_websocket(
         await websocket.close(code=4005)
         return
 
+    # Mark WebSocket as connected and update activity
+    from ..core.agent_manager import utcnow
+    agent.websocket_connected = True
+    agent.last_activity_at = utcnow()
+    agent.disconnect_count += 1
+    agent.marked_for_cleanup = False  # Un-mark if was marked
+
+    # Check for excessive reconnections (potential abuse)
+    if agent.disconnect_count > manager.settings.session_max_reconnections:
+        await websocket.send_json({
+            "type": "error",
+            "message": "Session exceeded maximum reconnections"
+        })
+        await websocket.close(code=4006)
+        return
+
     async def receive_and_respond():
         """Handle incoming messages and stream responses."""
         try:
@@ -119,6 +165,8 @@ async def chat_websocket(
                 except asyncio.TimeoutError:
                     # Send heartbeat
                     await websocket.send_json({"type": "heartbeat"})
+                    # Update activity on heartbeat (keeps session alive)
+                    agent.last_activity_at = utcnow()
                     continue
 
                 if data.get("type") == "input":
@@ -162,5 +210,7 @@ async def chat_websocket(
     try:
         await receive_and_respond()
     finally:
-        # Clean up when connection closes
-        pass
+        # Mark WebSocket as disconnected (but DON'T remove agent)
+        agent.websocket_connected = False
+        agent.last_activity_at = utcnow()
+        print(f"[DISCONNECT] Session {session_id} disconnected (total reconnects: {agent.disconnect_count})")
