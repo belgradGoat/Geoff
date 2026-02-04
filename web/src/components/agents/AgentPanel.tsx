@@ -146,6 +146,9 @@ export function AgentPanel() {
 
   const selectedAgent = agents.find((a) => a.id === selectedAgentId)
 
+  // Only show active sessions (starting or running), not stopped/failed
+  const activeSessions = agents.filter((a) => a.status === 'starting' || a.status === 'running')
+
   return (
     <div className="card p-4">
       <h2 className="text-lg font-semibold text-geoff-text mb-4">Active Sessions</h2>
@@ -160,10 +163,10 @@ export function AgentPanel() {
       <div className="space-y-2 mb-4">
         {loading && agents.length === 0 ? (
           <div className="text-geoff-text-muted text-center py-4">Loading sessions...</div>
-        ) : agents.length === 0 ? (
+        ) : activeSessions.length === 0 ? (
           <div className="text-geoff-text-muted text-center py-4">No active sessions</div>
         ) : (
-          agents.map((agent) => (
+          activeSessions.map((agent) => (
             <AgentItem
               key={agent.id}
               agent={agent}

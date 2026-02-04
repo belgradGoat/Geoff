@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useProjects } from '../../hooks/useProjects'
 import { useTasks } from '../../hooks/useTasks'
+import { NewProjectModal } from './NewProjectModal'
 
 export function ProjectSelector() {
   const {
@@ -14,9 +15,11 @@ export function ProjectSelector() {
     syncProjects,
     clearScanned,
     setBasePath,
+    addProject,
   } = useProjects()
   const { projectFilter, setProjectFilter } = useTasks()
   const [showScanner, setShowScanner] = useState(false)
+  const [showNewProject, setShowNewProject] = useState(false)
   const [inputPath, setInputPath] = useState(basePath || '')
 
   const handleScan = async () => {
@@ -39,6 +42,10 @@ export function ProjectSelector() {
     await syncProjects([path])
   }
 
+  const handleProjectCreated = async (name: string, path: string) => {
+    await addProject(name, path)
+  }
+
   const selectedProject = projects.find((p) => p.id === projectFilter)
   const newProjects = scannedProjects.filter((sp) => !sp.exists_in_db)
 
@@ -46,12 +53,21 @@ export function ProjectSelector() {
     <div className="card p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-geoff-text">Project</h2>
-        <button
-          onClick={() => setShowScanner(!showScanner)}
-          className="text-xs text-geoff-accent hover:text-geoff-accent-hover transition-colors"
-        >
-          {showScanner ? 'Close' : 'Scan Folder'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNewProject(true)}
+            className="text-xs text-geoff-accent hover:text-geoff-accent-hover transition-colors"
+          >
+            New Project
+          </button>
+          <span className="text-geoff-border">|</span>
+          <button
+            onClick={() => setShowScanner(!showScanner)}
+            className="text-xs text-geoff-accent hover:text-geoff-accent-hover transition-colors"
+          >
+            {showScanner ? 'Close' : 'Scan Folder'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -164,6 +180,13 @@ export function ProjectSelector() {
           {selectedProject.path}
         </div>
       )}
+
+      <NewProjectModal
+        isOpen={showNewProject}
+        onClose={() => setShowNewProject(false)}
+        onProjectCreated={handleProjectCreated}
+        defaultBasePath={basePath}
+      />
     </div>
   )
 }
