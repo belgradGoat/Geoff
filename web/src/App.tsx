@@ -20,11 +20,25 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'settings', label: 'Settings' },
 ]
 
+// Helper to get stored tab from localStorage
+function getStoredTab(): Tab {
+  const stored = localStorage.getItem('geoff-active-tab')
+  if (stored && ['tasks', 'files', 'settings', 'chat'].includes(stored)) {
+    return stored as Tab
+  }
+  return 'tasks'
+}
+
 function App() {
   const { fetchTasks, subscribeToChanges, projectFilter } = useTasks()
   const { fetchProjects } = useProjects()
-  const [activeTab, setActiveTab] = useState<Tab>('tasks')
+  const [activeTab, setActiveTab] = useState<Tab>(getStoredTab)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Persist active tab to localStorage
+  useEffect(() => {
+    localStorage.setItem('geoff-active-tab', activeTab)
+  }, [activeTab])
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Close mobile menu when clicking outside

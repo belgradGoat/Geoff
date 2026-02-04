@@ -55,7 +55,27 @@ export const useChat = create<ChatState>()(
 
       startSession: async (workingDir) => {
         try {
-          // Launch a chat-mode agent
+          const existingSessionId = get().sessionId
+
+          // If we have an existing session, try to reconnect to it first
+          if (existingSessionId) {
+            console.log('[SESSION] Found existing session, checking if still valid...')
+            const status = await orchestrator.getChatSessionStatus(existingSessionId)
+
+            if (status) {
+              // Session still exists on server - reconnect to it
+              console.log('[SESSION] Existing session still active, reconnecting...')
+              set({ reconnectAttempts: 0 })
+              get().connectWebSocket(existingSessionId)
+              return
+            } else {
+              // Session expired/not found - clear it and create new
+              console.log('[SESSION] Existing session expired, creating new one...')
+              set({ sessionId: null })
+            }
+          }
+
+          // Launch a new chat-mode agent
           const session = await orchestrator.startChatSession(workingDir)
           set({ sessionId: session.id, reconnectAttempts: 0 })
 
@@ -340,6 +360,15 @@ export const useChat = create<ChatState>()(
         sessionId: state.sessionId,
         messages: state.messages,
       }),
+      // Rehydrate Date objects from localStorage (they get serialized as strings)
+      onRehydrateStorage: () => (state) => {
+        if (state?.messages) {
+          state.messages = state.messages.map((msg) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp),
+          }))
+        }
+      },
     }
   )
 )

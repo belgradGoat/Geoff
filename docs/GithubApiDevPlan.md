@@ -338,6 +338,67 @@ For comprehensive GitHub features, consider adding a dedicated **GitHub tab**:
 
 ## 5. Technical Architecture
 
+### 5.0 Skills vs MCP Tools: Context Optimization
+
+**Problem:** Adding multiple GitHub tools to the MCP server increases context size for every agent interaction, even when GitHub features aren't needed.
+
+**Solution:** Use Claude Code Skills for GitHub operations instead of MCP tools.
+
+#### Comparison
+
+| Aspect | MCP Tools | Claude Code Skills |
+|--------|-----------|-------------------|
+| **Context loading** | Always loaded for every agent | On-demand, only when invoked |
+| **Execution** | Agent calls tool directly | Expands to prompt instructions |
+| **Implementation** | Custom Python code in MCP server | Leverages existing `gh` CLI via Bash |
+| **Maintenance** | Custom code to maintain | Relies on GitHub's official CLI |
+| **Context cost** | ~500-1000 tokens per tool | Zero until invoked |
+
+#### Recommended Approach: Hybrid
+
+**Use Skills for GitHub API operations:**
+- `/github-status` → `gh repo view`, `git status`
+- `/github-pr-create` → `gh pr create`
+- `/github-pr-list` → `gh pr list`
+- `/github-issue` → `gh issue create/list/view`
+- `/github-branch` → `gh api` for branch operations
+- `/github-commits` → `gh api` for commit history
+
+**Use MCP Tools only for database integration:**
+- `github_link_task_to_issue` - Links task record to GitHub issue
+- `github_link_task_to_pr` - Links task record to GitHub PR
+
+This hybrid approach reduces MCP server context by ~5000+ tokens (7 tools → 2 tools) while maintaining full functionality.
+
+#### Skill Implementation Example
+
+```markdown
+# /github-pr-create skill
+
+Create a pull request for the current branch.
+
+## Instructions
+1. Run `git status` to verify current branch and changes
+2. Run `git log main..HEAD --oneline` to see commits to include
+3. Use `gh pr create` with appropriate flags:
+   - `--title "PR title"`
+   - `--body "Description"`
+   - `--base main` (or specified base branch)
+4. Return the PR URL to the user
+
+## Usage
+gh pr create --title "Feature: Add dark mode" --body "$(cat <<'EOF'
+## Summary
+- Added dark mode toggle to settings
+- Implemented theme switching
+
+## Test Plan
+- [ ] Toggle switch works
+- [ ] Theme persists on reload
+EOF
+)"
+```
+
 ### 5.1 New Frontend Components
 
 ```
@@ -385,39 +446,88 @@ orchestrator/src/orchestrator/api/
 
 ### 5.3 New MCP Tools (For Claude Agents)
 
+> **Note:** Most GitHub operations are handled via Skills (see Section 5.0) to minimize context overhead. Only database-linking operations remain as MCP tools.
+
 ```python
 # mcp-server/src/agent_task_planner/tools.py
 
+# REMOVED - Use /github-status skill instead
+# def github_get_status(project_id: str) -> dict:
+
+# REMOVED - Use /github-branch skill instead
+# def github_list_branches(project_id: str) -> list:
+# def github_create_branch(project_id: str, ...) -> dict:
+
+# REMOVED - Use /github-pr-create skill instead
+# def github_create_pr(project_id: str, ...) -> dict:
+
+# REMOVED - Use /github-issue skill instead
+# def github_create_issue(project_id: str, ...) -> dict:
+
+# KEPT - These require database integration
 @mcp.tool()
-def github_get_status(project_id: str) -> dict:
-    """Get Git status for a project."""
+def github_link_task_to_issue(task_id: str, issue_number: int, repo_url: str) -> dict:
+    """Link a task to a GitHub issue. Updates task.context.github with issue reference."""
 
 @mcp.tool()
-def github_list_branches(project_id: str) -> list:
-    """List branches in the repository."""
-
-@mcp.tool()
-def github_create_branch(project_id: str, branch_name: str, from_branch: str = "main") -> dict:
-    """Create a new branch."""
-
-@mcp.tool()
-def github_create_pr(project_id: str, title: str, body: str, head: str, base: str = "main") -> dict:
-    """Create a pull request."""
-
-@mcp.tool()
-def github_create_issue(project_id: str, title: str, body: str, labels: list = None) -> dict:
-    """Create a GitHub issue."""
-
-@mcp.tool()
-def github_link_task_to_issue(task_id: str, issue_number: int) -> dict:
-    """Link a task to a GitHub issue."""
-
-@mcp.tool()
-def github_link_task_to_pr(task_id: str, pr_number: int) -> dict:
-    """Link a task to a pull request."""
+def github_link_task_to_pr(task_id: str, pr_number: int, repo_url: str) -> dict:
+    """Link a task to a pull request. Updates task.context.github with PR reference."""
 ```
 
-### 5.4 API Client Extension
+### 5.4 GitHub Skills (On-Demand Loading)
+
+Skills are defined in the Claude Code skills directory and loaded only when invoked, keeping agent context minimal.
+
+```
+~/.claude/skills/
+├── github-status.md        # Display repo status, branch, changes
+├── github-pr-create.md     # Create pull request via gh CLI
+├── github-pr-list.md       # List open/closed PRs
+├── github-issue.md         # Create/list/view issues
+├── github-branch.md        # Branch operations
+└── github-commits.md       # View commit history
+```
+
+**Example Skill: `github-pr-list.md`**
+```markdown
+# /github-pr-list
+
+List pull requests for the current repository.
+
+## Usage
+- `/github-pr-list` - List open PRs
+- `/github-pr-list --state closed` - List closed PRs
+- `/github-pr-list --author @me` - List your PRs
+
+## Instructions
+1. Verify you're in a git repository with `git rev-parse --git-dir`
+2. Run `gh pr list` with any provided flags
+3. Format output as a clean table for the user
+4. Include PR number, title, author, and status
+```
+
+**Example Skill: `github-issue.md`**
+```markdown
+# /github-issue
+
+Create or list GitHub issues.
+
+## Usage
+- `/github-issue list` - List open issues
+- `/github-issue create "Title" "Body"` - Create new issue
+- `/github-issue view 42` - View issue #42
+
+## Instructions
+Use the `gh issue` command family:
+- `gh issue list` for listing
+- `gh issue create --title "..." --body "..."` for creation
+- `gh issue view <number>` for viewing
+
+When creating issues from tasks, suggest linking via the MCP tool:
+`github_link_task_to_issue(task_id, issue_number, repo_url)`
+```
+
+### 5.5 API Client Extension
 
 ```typescript
 // web/src/lib/orchestrator.ts
@@ -688,8 +798,22 @@ def github_request_with_retry(url: str, token: str, max_retries: int = 3):
 2. **Use local Git** for status operations - Reliable and fast
 3. **Use GitHub API** for PR/issue operations - Standard approach
 4. **Store tokens encrypted** - Security first
+5. **Use Skills over MCP Tools** - Implement GitHub operations as Claude Code skills to minimize context overhead (see Section 5.0)
 
-### 10.2 Library Recommendations
+### 10.2 Context Optimization Strategy
+
+**Why Skills Matter:**
+- Each MCP tool adds ~500-1000 tokens to every agent context
+- 7 GitHub tools = ~5000+ tokens consumed even when not using GitHub features
+- Skills load on-demand, costing zero tokens until invoked
+- The `gh` CLI already provides comprehensive GitHub functionality
+
+**Implementation Priority:**
+1. Create skill files in `~/.claude/skills/` directory
+2. Keep only 2 MCP tools for database linking operations
+3. Document skill usage in user guide
+
+### 10.3 Library Recommendations
 
 **Python (Orchestrator):**
 - `PyGithub` - Well-maintained GitHub API wrapper
@@ -700,13 +824,13 @@ def github_request_with_retry(url: str, token: str, max_retries: int = 3):
 - `@octokit/rest` - Official GitHub API client (if needed client-side)
 - Native `fetch` is sufficient for orchestrator communication
 
-### 10.3 Testing Strategy
+### 10.4 Testing Strategy
 
 1. **Unit tests** for API endpoints with mocked GitHub responses
 2. **Integration tests** with a test repository
 3. **E2E tests** for critical flows (token setup, PR creation)
 
-### 10.4 Documentation Updates
+### 10.5 Documentation Updates
 
 When implemented, update:
 - `docs/userguide.md` - How to set up GitHub integration

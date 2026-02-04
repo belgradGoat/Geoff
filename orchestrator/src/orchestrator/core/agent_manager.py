@@ -340,10 +340,16 @@ class AgentManager:
             Output lines from the agent
         """
         agent = self.agents.get(session_id)
-        if not agent or not agent.is_chat_mode:
+        if not agent:
+            yield "Error: Session not found. Please start a new session."
+            return
+
+        if not agent.is_chat_mode:
+            yield "Error: This session is not in chat mode."
             return
 
         if agent.status != AgentStatus.RUNNING:
+            yield f"Error: Session is not running (status: {agent.status.value}). Please start a new session."
             return
 
         # Update activity timestamp on message send
