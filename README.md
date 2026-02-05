@@ -87,11 +87,11 @@ For remote access from your phone, use your Tailscale IP (shown after setup).
 | **Create tasks** | Quick-add ideas before you forget them |
 | **Launch agents** | Tell Claude to work on a task |
 | **Interactive chat** | Have conversations with AI agents |
-| **Watch progress** | Stream agent output in real-time |
 | **Create Projects** | Create folders for new projects and make your ideas happen |
 | **Browse and view files** | Navigate your computer filesystem |
 | **View code** | Read files to provide context |
 | **Create folders** | Set up new project directories |
+| **Interact with Github** | Push/Pull to Github, create new branches |
 
 ---
 
