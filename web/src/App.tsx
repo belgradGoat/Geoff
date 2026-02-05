@@ -10,6 +10,7 @@ import { RemoteAccess } from './components/settings/RemoteAccess'
 import { ProviderSettings } from './components/settings/ProviderSettings'
 import { AllowedPathsSettings } from './components/settings/AllowedPathsSettings'
 import { AgentChat } from './components/chat/AgentChat'
+import { GitHubSettings } from './components/github/GitHubSettings'
 
 type Tab = 'tasks' | 'files' | 'settings' | 'chat'
 
@@ -184,6 +185,7 @@ function App() {
             <ProjectSelector />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <GitHubSettings />
               <ProviderSettings />
               <RemoteAccess />
               <AllowedPathsSettings />

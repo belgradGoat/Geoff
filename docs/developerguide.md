@@ -9,10 +9,11 @@ This guide covers the architecture, technical implementation, and extension poin
 3. [Database Schema](#database-schema)
 4. [MCP Server](#mcp-server)
 5. [Orchestrator](#orchestrator)
-6. [Web UI](#web-ui)
-7. [Security](#security)
-8. [Extending the System](#extending-the-system)
-9. [Troubleshooting](#troubleshooting)
+6. [GitHub API Integration](#github-api-integration)
+7. [Web UI](#web-ui)
+8. [Security](#security)
+9. [Extending the System](#extending-the-system)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -403,6 +404,7 @@ orchestrator/
     ├── api/
     │   ├── agents.py        # REST endpoints
     │   ├── chat.py          # Chat session endpoints
+    │   ├── github.py        # GitHub API endpoints (NEW)
     │   └── websocket.py     # WebSocket streaming
     └── core/
         ├── config.py        # Settings management
@@ -601,6 +603,215 @@ The web UI stores the user's provider preference in `localStorage` under `geoff-
 
 ---
 
+## GitHub API Integration
+
+The GitHub integration provides repository status, branch management, pull requests, issues, and commit history through the orchestrator API.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Web UI (React)                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
+│  │  GitStatusBar   │  │ GitHubSettings  │  │ GitHubContext   │ │
+│  │  BranchSelector │  │                 │  │ (TaskDetail)    │ │
+│  │  PullRequestList│  │                 │  │                 │ │
+│  │  IssueList      │  │                 │  │                 │ │
+│  │  CommitHistory  │  │                 │  │                 │ │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘ │
+│           │                    │                    │           │
+└───────────┼────────────────────┼────────────────────┼───────────┘
+            │                    │                    │
+            └────────────────────┼────────────────────┘
+                                 │ HTTP
+                                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Orchestrator (FastAPI) - github.py                 │
+│                                                                  │
+│  /api/github/{project_id}/status    → git status, branch info   │
+│  /api/github/{project_id}/branches  → git branch listing        │
+│  /api/github/{project_id}/commits   → git log                   │
+│  /api/github/{project_id}/pulls     → gh pr list                │
+│  /api/github/{project_id}/issues    → gh issue list             │
+│                                                                  │
+│  POST /api/github/{project_id}/branches     → git checkout -b   │
+│  POST /api/github/{project_id}/branches/checkout → git checkout │
+│  POST /api/github/{project_id}/pulls        → gh pr create      │
+│  POST /api/github/{project_id}/issues       → gh issue create   │
+└─────────────────────────────────────────────────────────────────┘
+            │                    │
+            │ subprocess         │ subprocess
+            ▼                    ▼
+       ┌─────────┐          ┌─────────┐
+       │   git   │          │   gh    │
+       │   CLI   │          │   CLI   │
+       └─────────┘          └─────────┘
+```
+
+### API Endpoints
+
+All GitHub endpoints are defined in `orchestrator/src/orchestrator/api/github.py`.
+
+#### Read Endpoints
+
+| Method | Path | Description | Uses |
+|--------|------|-------------|------|
+| GET | `/api/github/{project_id}/status` | Repository status (branch, modified files, ahead/behind) | `git` CLI |
+| GET | `/api/github/{project_id}/branches` | List all branches | `git` CLI |
+| GET | `/api/github/{project_id}/commits` | Recent commit history | `git` CLI |
+| GET | `/api/github/{project_id}/pulls` | List pull requests | `gh` CLI |
+| GET | `/api/github/{project_id}/issues` | List issues | `gh` CLI |
+
+#### Write Endpoints
+
+| Method | Path | Description | Uses |
+|--------|------|-------------|------|
+| POST | `/api/github/{project_id}/branches` | Create new branch | `git` CLI |
+| POST | `/api/github/{project_id}/branches/checkout` | Switch branches | `git` CLI |
+| POST | `/api/github/{project_id}/pulls` | Create pull request | `gh` CLI |
+| POST | `/api/github/{project_id}/issues` | Create issue | `gh` CLI |
+
+### Dependencies
+
+The GitHub integration requires:
+
+1. **Git CLI** - For local repository operations (status, branches, commits)
+2. **GitHub CLI (`gh`)** - For GitHub API operations (PRs, issues)
+   - Must be authenticated: `gh auth login`
+
+### Frontend Components
+
+New components added in `web/src/components/github/`:
+
+| Component | Description |
+|-----------|-------------|
+| `GitStatusBar.tsx` | Displays branch, modified files, untracked files, ahead/behind |
+| `GitHubSettings.tsx` | Token management with validation |
+| `GitHubContext.tsx` | Task-GitHub linking display in TaskDetail |
+| `BranchSelector.tsx` | Branch listing and switching |
+| `PullRequestList.tsx` | PR listing with status |
+| `IssueList.tsx` | Issue listing with labels |
+| `CommitHistory.tsx` | Recent commits display |
+
+### MCP Tools for Task-GitHub Linking
+
+Four MCP tools enable agents to link tasks to GitHub artifacts:
+
+```python
+# mcp-server/src/agent_task_planner/tools.py
+
+@mcp.tool()
+def task_link_to_issue(task_id: str, issue_number: int, repo_url: str) -> dict:
+    """Link a task to a GitHub issue.
+
+    Updates the task's context.github field with the issue reference.
+    """
+
+@mcp.tool()
+def task_link_to_pr(task_id: str, pr_number: int, repo_url: str) -> dict:
+    """Link a task to a pull request.
+
+    Updates the task's context.github field with the PR reference.
+    """
+
+@mcp.tool()
+def task_add_commit(task_id: str, commit_sha: str, message: Optional[str] = None) -> dict:
+    """Add a commit reference to a task.
+
+    Updates the task's context.github.related_commits field.
+    """
+
+@mcp.tool()
+def task_set_branch(task_id: str, branch_name: str) -> dict:
+    """Set the working branch for a task.
+
+    Updates the task's context.github.branch field.
+    """
+```
+
+### Task Context Schema
+
+The task's `context.github` field stores GitHub references:
+
+```json
+{
+  "github": {
+    "issue": {
+      "number": 42,
+      "repo_url": "https://github.com/owner/repo"
+    },
+    "pr": {
+      "number": 55,
+      "repo_url": "https://github.com/owner/repo"
+    },
+    "related_commits": [
+      {"sha": "abc123", "message": "Fix bug"},
+      {"sha": "def456", "message": "Add tests"}
+    ],
+    "branch": "feature/task-123"
+  }
+}
+```
+
+### TypeScript Interfaces
+
+New interfaces in `web/src/lib/orchestrator.ts`:
+
+```typescript
+export interface GitStatus {
+  branch: string;
+  ahead: number;
+  behind: number;
+  modified: string[];
+  untracked: string[];
+  staged: string[];
+}
+
+export interface GitBranch {
+  name: string;
+  is_current: boolean;
+}
+
+export interface GitCommit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+export interface PullRequest {
+  number: number;
+  title: string;
+  state: string;
+  author: string;
+  url: string;
+  head_branch: string;
+  base_branch: string;
+}
+
+export interface GitHubIssue {
+  number: number;
+  title: string;
+  state: string;
+  labels: string[];
+  url: string;
+}
+```
+
+### Error Handling
+
+GitHub operations can fail for various reasons. The API returns appropriate error codes:
+
+| Error | Status Code | Cause |
+|-------|-------------|-------|
+| Project not found | 404 | Invalid project_id |
+| Not a git repository | 400 | Project path is not a git repo |
+| gh CLI not found | 500 | GitHub CLI not installed |
+| gh not authenticated | 401 | User needs to run `gh auth login` |
+| Rate limit exceeded | 429 | Too many GitHub API requests |
+
+---
+
 ## Web UI
 
 ### Technology Stack
@@ -630,7 +841,7 @@ web/
     ├── index.css
     ├── lib/
     │   ├── supabase.ts      # Client + types
-    │   └── orchestrator.ts  # API client (+ provider types)
+    │   └── orchestrator.ts  # API client (+ provider types + GitHub types)
     ├── hooks/
     │   ├── useTasks.ts      # Task state
     │   ├── useAgents.ts     # Agent state (provider-aware)
@@ -646,11 +857,20 @@ web/
         ├── chat/
         │   └── ChatPanel.tsx # Interactive chat UI
         ├── files/
-        │   └── FileBrowser.tsx
+        │   └── FileBrowser.tsx  # Includes GitStatusBar
+        ├── github/              # NEW - GitHub integration components
+        │   ├── GitStatusBar.tsx
+        │   ├── GitHubSettings.tsx
+        │   ├── GitHubContext.tsx
+        │   ├── BranchSelector.tsx
+        │   ├── PullRequestList.tsx
+        │   ├── IssueList.tsx
+        │   └── CommitHistory.tsx
         ├── projects/
         │   └── ProjectSelector.tsx
         └── settings/
             ├── ProviderSettings.tsx  # AI provider selector
+            ├── GitHubSettings.tsx    # GitHub token management
             └── RemoteAccess.tsx
 ```
 

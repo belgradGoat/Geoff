@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     # MCP Server Configuration (for spawned agents)
     mcp_python_path: str = os.getenv("MCP_PYTHON_PATH", "")
 
+    # Token Encryption Key (for GitHub tokens stored in database)
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    token_encryption_key: str = os.getenv("TOKEN_ENCRYPTION_KEY", "")
+
     class Config:
         env_prefix = "ORCHESTRATOR_"
 

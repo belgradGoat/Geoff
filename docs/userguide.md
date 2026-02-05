@@ -13,11 +13,12 @@ This guide covers how to use Geoff for managing tasks and orchestrating AI agent
 7. [Agent Orchestration](#agent-orchestration)
 8. [Interactive Chat](#interactive-chat)
 9. [AI Providers](#ai-providers)
-10. [Allowed Paths (Security)](#allowed-paths-security)
-11. [Remote Access via Tailscale](#remote-access-via-tailscale)
-12. [Using MCP Tools](#using-mcp-tools)
-13. [Troubleshooting](#troubleshooting)
-14. [Tips and Best Practices](#tips-and-best-practices)
+10. [GitHub Integration](#github-integration)
+11. [Allowed Paths (Security)](#allowed-paths-security)
+12. [Remote Access via Tailscale](#remote-access-via-tailscale)
+13. [Using MCP Tools](#using-mcp-tools)
+14. [Troubleshooting](#troubleshooting)
+15. [Tips and Best Practices](#tips-and-best-practices)
 
 ---
 
@@ -734,6 +735,129 @@ ORCHESTRATOR_OPENCODE_COMMAND=/path/to/opencode
 
 ---
 
+## GitHub Integration
+
+Geoff integrates with GitHub to provide repository status, branch management, pull requests, and issue tracking directly within the UI.
+
+### Prerequisites
+
+GitHub integration requires the **GitHub CLI (`gh`)** to be installed and authenticated:
+
+```bash
+# Install GitHub CLI
+# macOS
+brew install gh
+
+# Windows
+winget install --id GitHub.cli
+
+# Linux
+# See https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+
+# Authenticate with GitHub
+gh auth login
+```
+
+### Git Status Bar
+
+When viewing a Git repository in the **Files** tab, you'll see a status bar showing:
+
+| Information | Description |
+|-------------|-------------|
+| **Branch** | Current branch name |
+| **Modified** | Number of modified files |
+| **Untracked** | Number of untracked files |
+| **Ahead/Behind** | Commits ahead/behind the remote |
+
+The status bar appears automatically when browsing a project directory that contains a `.git` folder.
+
+### GitHub Settings
+
+Configure GitHub tokens in the **Settings** tab:
+
+1. Go to **Settings** → **GitHub Settings**
+2. Enter your GitHub Personal Access Token (PAT)
+3. Click **Validate** to verify the token works
+4. The token is stored securely and used for GitHub API operations
+
+**Creating a GitHub PAT:**
+1. Go to [GitHub Settings → Developer settings → Personal access tokens](https://github.com/settings/tokens)
+2. Click "Generate new token (classic)"
+3. Select scopes: `repo` (full repository access)
+4. Copy the token and paste it into Geoff's GitHub Settings
+
+### Branch Management
+
+View and manage branches from the File Browser:
+
+- **View branches**: See all repository branches
+- **Current branch**: Highlighted with a checkmark
+- **Switch branches**: Click a branch to check it out
+- **Create branch**: Create new branches from the UI
+
+### Pull Requests
+
+View and create pull requests:
+
+| Feature | Description |
+|---------|-------------|
+| **List PRs** | View open and closed pull requests |
+| **PR Details** | See title, author, status, and URL |
+| **Create PR** | Create a new PR for the current branch |
+
+### Issues
+
+View and create GitHub issues:
+
+| Feature | Description |
+|---------|-------------|
+| **List Issues** | View open issues for the repository |
+| **Issue Details** | See title, labels, and status |
+| **Create Issue** | Create new issues from the UI |
+
+### Commit History
+
+View recent commits for the repository, including:
+- Commit SHA (short)
+- Commit message
+- Author
+- Date
+
+### Linking Tasks to GitHub
+
+Tasks can be linked to GitHub artifacts (issues, PRs, commits, branches) for traceability:
+
+**Via Web UI:**
+- Open a task's detail view
+- See the **GitHub Context** section showing linked issues/PRs
+
+**Via MCP Tools (for agents):**
+```
+task_link_to_issue(task_id="uuid", issue_number=42, repo_url="https://github.com/owner/repo")
+task_link_to_pr(task_id="uuid", pr_number=55, repo_url="https://github.com/owner/repo")
+task_add_commit(task_id="uuid", commit_sha="abc123", message="Fix bug")
+task_set_branch(task_id="uuid", branch_name="feature/task-123")
+```
+
+### Troubleshooting GitHub Integration
+
+**"gh: command not found"**
+- Install the GitHub CLI: `brew install gh` (macOS) or see installation instructions above
+
+**"gh: not logged in"**
+- Run `gh auth login` and follow the prompts to authenticate
+
+**"API rate limit exceeded"**
+- Ensure you're authenticated with `gh auth login`
+- Authenticated requests have a 5,000 requests/hour limit
+
+**PRs/Issues not loading**
+- Verify the project directory is a Git repository with a remote
+- Check that `gh` is authenticated: `gh auth status`
+- Ensure the repository is hosted on GitHub (not GitLab, Bitbucket, etc.)
+
+---
+
 ## Allowed Paths (Security)
 
 By default, Geoff's file browser can access any directory on your system. You can restrict access to specific directories for improved security.
@@ -952,6 +1076,28 @@ task_add_subtask(
 ```
 task_add_note(task_id="uuid", agent_id="my-agent-id", note="Found a potential issue with the API")
 ```
+
+### GitHub Integration Tools
+
+```
+task_link_to_issue(task_id="uuid", issue_number=42, repo_url="https://github.com/owner/repo")
+```
+Link a task to a GitHub issue. Updates the task's `context.github` field with the issue reference.
+
+```
+task_link_to_pr(task_id="uuid", pr_number=55, repo_url="https://github.com/owner/repo")
+```
+Link a task to a GitHub pull request. Updates the task's `context.github` field with the PR reference.
+
+```
+task_add_commit(task_id="uuid", commit_sha="abc123", message="Optional commit message")
+```
+Add a commit reference to a task. Useful for tracking which commits relate to a task.
+
+```
+task_set_branch(task_id="uuid", branch_name="feature/task-123")
+```
+Set the working branch for a task. Indicates which branch is being used to implement the task.
 
 ### Project Tools
 

@@ -10,10 +10,11 @@ You're at work. You have an idea for your side project. You pull out your phone,
 
 | Component | What It Does |
 |-----------|--------------|
-| **Web UI** | Mobile-friendly interface for tasks, files, agents, and chat |
+| **Web UI** | Mobile-friendly interface for tasks, files, agents, chat, and GitHub integration |
 | **Orchestrator** | Runs on your Mac, launches AI agents (Claude, Codex, Gemini, OpenCode) |
-| **MCP Server** | Gives AI agents access to task tools |
+| **MCP Server** | Gives AI agents access to task tools and GitHub linking |
 | **Supabase** | Stores tasks, syncs everywhere |
+| **GitHub Integration** | View repo status, branches, PRs, issues; link tasks to GitHub artifacts |
 
 ## How It Fits Together
 
@@ -50,6 +51,7 @@ Your Phone                         Your Mac (at home)
 - **[User Guide](userguide.md)** - Setup instructions, how to use each feature
 - **[Developer Guide](developerguide.md)** - Contributing and technical details
 - **[Architecture](architecture.md)** - Original design doc, data models, state machines
+- **[GitHub API Dev Plan](GithubApiDevPlan.md)** - GitHub integration design and implementation status
 
 ## Quick Setup
 
@@ -65,6 +67,7 @@ Your Phone                         Your Mac (at home)
   - [OpenCode](https://github.com/opencode-ai/opencode)
 - [Tailscale](https://tailscale.com) (free)
 - [Supabase](https://supabase.com) account (free tier)
+- [GitHub CLI](https://cli.github.com) (optional, for GitHub integration)
 
 ### Automated Setup (Recommended)
 

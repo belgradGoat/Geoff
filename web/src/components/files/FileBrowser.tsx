@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { orchestrator, FileEntry, FileContentResponse } from '../../lib/orchestrator'
 import { useProjects } from '../../hooks/useProjects'
 import { useTasks } from '../../hooks/useTasks'
+import { GitStatusBar } from '../github/GitStatusBar'
 
 function formatSize(bytes?: number): string {
   if (bytes === undefined) return ''
@@ -343,6 +344,13 @@ export function FileBrowser() {
 
   return (
     <div className="card flex flex-col h-[600px]">
+      {/* Git Status Bar */}
+      {projectFilter && (
+        <div className="p-3 border-b border-geoff-border">
+          <GitStatusBar projectId={projectFilter} onRefresh={() => browse(currentPath)} />
+        </div>
+      )}
+
       {/* Header */}
       <div className="p-4 border-b border-geoff-border">
         <div className="flex items-center justify-between mb-3">

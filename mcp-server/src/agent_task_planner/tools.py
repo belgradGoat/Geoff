@@ -619,3 +619,224 @@ def create_task(
     result = db.table("tasks").insert(task_data).execute()
 
     return {"success": True, "task": result.data[0]}
+
+
+# =============================================================================
+# GitHub Integration Functions
+# =============================================================================
+
+
+def github_link_task_to_issue(task_id: str, issue_number: int, repo_url: str) -> dict:
+    """
+    Link a task to a GitHub issue.
+
+    Updates the task's context.github field with the issue reference.
+    This allows tracking which GitHub issue corresponds to a task.
+
+    Args:
+        task_id: The UUID of the task to link
+        issue_number: The GitHub issue number (e.g., 42)
+        repo_url: The repository URL (e.g., "https://github.com/owner/repo")
+
+    Returns:
+        Updated task or error
+    """
+    db = get_db()
+
+    # Get current task context
+    task = db.table("tasks").select("context").eq("id", task_id).single().execute()
+
+    if not task.data:
+        return {"success": False, "error": "Task not found"}
+
+    # Update context with GitHub issue reference
+    current_context = task.data.get("context") or {}
+    github_context = current_context.get("github", {})
+    github_context["linked_issue"] = issue_number
+    github_context["repo_url"] = repo_url
+    current_context["github"] = github_context
+
+    result = (
+        db.table("tasks")
+        .update({"context": current_context})
+        .eq("id", task_id)
+        .execute()
+    )
+
+    if not result.data:
+        return {"success": False, "error": "Failed to update task"}
+
+    # Log the link
+    db.table("task_logs").insert(
+        {
+            "task_id": task_id,
+            "event_type": "github_linked",
+            "message": f"Linked to GitHub issue #{issue_number}",
+            "metadata": {"issue_number": issue_number, "repo_url": repo_url},
+        }
+    ).execute()
+
+    return {"success": True, "task": result.data[0]}
+
+
+def github_link_task_to_pr(task_id: str, pr_number: int, repo_url: str) -> dict:
+    """
+    Link a task to a GitHub pull request.
+
+    Updates the task's context.github field with the PR reference.
+    This allows tracking which pull request implements a task.
+
+    Args:
+        task_id: The UUID of the task to link
+        pr_number: The GitHub PR number (e.g., 55)
+        repo_url: The repository URL (e.g., "https://github.com/owner/repo")
+
+    Returns:
+        Updated task or error
+    """
+    db = get_db()
+
+    # Get current task context
+    task = db.table("tasks").select("context").eq("id", task_id).single().execute()
+
+    if not task.data:
+        return {"success": False, "error": "Task not found"}
+
+    # Update context with GitHub PR reference
+    current_context = task.data.get("context") or {}
+    github_context = current_context.get("github", {})
+    github_context["linked_pr"] = pr_number
+    github_context["repo_url"] = repo_url
+    current_context["github"] = github_context
+
+    result = (
+        db.table("tasks")
+        .update({"context": current_context})
+        .eq("id", task_id)
+        .execute()
+    )
+
+    if not result.data:
+        return {"success": False, "error": "Failed to update task"}
+
+    # Log the link
+    db.table("task_logs").insert(
+        {
+            "task_id": task_id,
+            "event_type": "github_linked",
+            "message": f"Linked to GitHub PR #{pr_number}",
+            "metadata": {"pr_number": pr_number, "repo_url": repo_url},
+        }
+    ).execute()
+
+    return {"success": True, "task": result.data[0]}
+
+
+def github_add_commit_to_task(task_id: str, commit_sha: str, message: Optional[str] = None) -> dict:
+    """
+    Add a commit reference to a task.
+
+    Updates the task's context.github.related_commits field with the commit SHA.
+    This allows tracking which commits are related to a task.
+
+    Args:
+        task_id: The UUID of the task
+        commit_sha: The Git commit SHA (full or short)
+        message: Optional commit message for reference
+
+    Returns:
+        Updated task or error
+    """
+    db = get_db()
+
+    # Get current task context
+    task = db.table("tasks").select("context").eq("id", task_id).single().execute()
+
+    if not task.data:
+        return {"success": False, "error": "Task not found"}
+
+    # Update context with commit reference
+    current_context = task.data.get("context") or {}
+    github_context = current_context.get("github", {})
+    related_commits = github_context.get("related_commits", [])
+
+    # Add commit if not already present
+    if commit_sha not in related_commits:
+        related_commits.append(commit_sha)
+        github_context["related_commits"] = related_commits
+        current_context["github"] = github_context
+
+        result = (
+            db.table("tasks")
+            .update({"context": current_context})
+            .eq("id", task_id)
+            .execute()
+        )
+
+        if not result.data:
+            return {"success": False, "error": "Failed to update task"}
+
+        # Log the commit link
+        db.table("task_logs").insert(
+            {
+                "task_id": task_id,
+                "event_type": "commit_linked",
+                "message": f"Linked commit {commit_sha[:7]}",
+                "metadata": {"commit_sha": commit_sha, "message": message},
+            }
+        ).execute()
+
+        return {"success": True, "task": result.data[0], "added": True}
+
+    return {"success": True, "task": task.data, "added": False, "message": "Commit already linked"}
+
+
+def github_set_task_branch(task_id: str, branch_name: str) -> dict:
+    """
+    Set the working branch for a task.
+
+    Updates the task's context.github.branch field.
+    This indicates which branch is being used to work on the task.
+
+    Args:
+        task_id: The UUID of the task
+        branch_name: The Git branch name (e.g., "feature/task-123")
+
+    Returns:
+        Updated task or error
+    """
+    db = get_db()
+
+    # Get current task context
+    task = db.table("tasks").select("context").eq("id", task_id).single().execute()
+
+    if not task.data:
+        return {"success": False, "error": "Task not found"}
+
+    # Update context with branch reference
+    current_context = task.data.get("context") or {}
+    github_context = current_context.get("github", {})
+    github_context["branch"] = branch_name
+    current_context["github"] = github_context
+
+    result = (
+        db.table("tasks")
+        .update({"context": current_context})
+        .eq("id", task_id)
+        .execute()
+    )
+
+    if not result.data:
+        return {"success": False, "error": "Failed to update task"}
+
+    # Log the branch assignment
+    db.table("task_logs").insert(
+        {
+            "task_id": task_id,
+            "event_type": "branch_assigned",
+            "message": f"Working branch set to '{branch_name}'",
+            "metadata": {"branch": branch_name},
+        }
+    ).execute()
+
+    return {"success": True, "task": result.data[0]}

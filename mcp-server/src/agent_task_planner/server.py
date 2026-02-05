@@ -21,6 +21,11 @@ from .tools import (
     create_project,
     update_project,
     scan_projects_folder,
+    # GitHub integration tools
+    github_link_task_to_issue,
+    github_link_task_to_pr,
+    github_add_commit_to_task,
+    github_set_task_branch,
 )
 
 # Create the FastMCP server
@@ -286,6 +291,74 @@ def task_create(
         estimated_minutes=estimated_minutes,
         project_id=project_id,
     )
+
+
+# =============================================================================
+# GitHub Integration Tools
+# =============================================================================
+
+
+@mcp.tool()
+def task_link_to_issue(task_id: str, issue_number: int, repo_url: str) -> dict:
+    """
+    Link a task to a GitHub issue.
+
+    Updates the task's context.github field with the issue reference.
+    This allows tracking which GitHub issue corresponds to a task.
+
+    Args:
+        task_id: The UUID of the task to link
+        issue_number: The GitHub issue number (e.g., 42)
+        repo_url: The repository URL (e.g., "https://github.com/owner/repo")
+    """
+    return github_link_task_to_issue(task_id, issue_number, repo_url)
+
+
+@mcp.tool()
+def task_link_to_pr(task_id: str, pr_number: int, repo_url: str) -> dict:
+    """
+    Link a task to a GitHub pull request.
+
+    Updates the task's context.github field with the PR reference.
+    This allows tracking which pull request implements a task.
+
+    Args:
+        task_id: The UUID of the task to link
+        pr_number: The GitHub PR number (e.g., 55)
+        repo_url: The repository URL (e.g., "https://github.com/owner/repo")
+    """
+    return github_link_task_to_pr(task_id, pr_number, repo_url)
+
+
+@mcp.tool()
+def task_add_commit(task_id: str, commit_sha: str, message: Optional[str] = None) -> dict:
+    """
+    Add a commit reference to a task.
+
+    Updates the task's context.github.related_commits field.
+    This allows tracking which commits are related to a task.
+
+    Args:
+        task_id: The UUID of the task
+        commit_sha: The Git commit SHA (full or short)
+        message: Optional commit message for reference
+    """
+    return github_add_commit_to_task(task_id, commit_sha, message)
+
+
+@mcp.tool()
+def task_set_branch(task_id: str, branch_name: str) -> dict:
+    """
+    Set the working branch for a task.
+
+    Updates the task's context.github.branch field.
+    This indicates which branch is being used to work on the task.
+
+    Args:
+        task_id: The UUID of the task
+        branch_name: The Git branch name (e.g., "feature/task-123")
+    """
+    return github_set_task_branch(task_id, branch_name)
 
 
 def main():

@@ -335,6 +335,20 @@ POST   /api/batch/stop                # Stop all running agents
 GET    /api/batch/status              # Summary of all agents + tasks
 ```
 
+#### GitHub Integration
+
+```
+GET    /api/github/:project_id/status      # Get repo status (branch, modified files)
+GET    /api/github/:project_id/branches    # List branches
+GET    /api/github/:project_id/commits     # Get recent commits
+GET    /api/github/:project_id/pulls       # List pull requests
+GET    /api/github/:project_id/issues      # List issues
+POST   /api/github/:project_id/branches    # Create new branch
+POST   /api/github/:project_id/branches/checkout # Switch branch
+POST   /api/github/:project_id/pulls       # Create pull request
+POST   /api/github/:project_id/issues      # Create issue
+```
+
 #### Live Output Streaming
 
 ```
@@ -492,6 +506,12 @@ Tools exposed to AI agents:
 - `add_subtask(parent_id, title, description, acceptance_criteria)` - Break down work
 - `add_note(id, content)` - Add observation without status change
 
+### GitHub Integration Tools
+- `task_link_to_issue(task_id, issue_number, repo_url)` - Link a task to a GitHub issue
+- `task_link_to_pr(task_id, pr_number, repo_url)` - Link a task to a pull request
+- `task_add_commit(task_id, commit_sha, message?)` - Add a commit reference to a task
+- `task_set_branch(task_id, branch_name)` - Set the working branch for a task
+
 ### Orchestrator Tools
 - `evaluate_batch()` - Analyze ready tasks, suggest execution order
 - `get_dependency_graph()` - Full dependency visualization data
@@ -629,6 +649,7 @@ AgentTaskPlanner/
 │   │       │   ├── __init__.py
 │   │       │   ├── agents.py   # Agent CRUD endpoints
 │   │       │   ├── batch.py    # Batch operations
+│   │       │   ├── github.py   # GitHub API endpoints (status, branches, PRs, issues)
 │   │       │   └── websocket.py # Output streaming
 │   │       ├── core/
 │   │       │   ├── __init__.py
@@ -655,8 +676,17 @@ AgentTaskPlanner/
 │   │   │   │   ├── AgentPanel.tsx
 │   │   │   │   ├── LaunchButton.tsx
 │   │   │   │   └── OutputTerminal.tsx
+│   │   │   ├── github/         # GitHub integration components
+│   │   │   │   ├── GitStatusBar.tsx      # Branch, modified files display
+│   │   │   │   ├── GitHubSettings.tsx    # Token management
+│   │   │   │   ├── GitHubContext.tsx     # Task-GitHub linking
+│   │   │   │   ├── BranchSelector.tsx    # Branch listing/switching
+│   │   │   │   ├── PullRequestList.tsx   # PR listing
+│   │   │   │   ├── IssueList.tsx         # Issue listing
+│   │   │   │   └── CommitHistory.tsx     # Commit history
 │   │   │   └── settings/       # Settings components
 │   │   │       ├── ProviderSettings.tsx  # AI provider selector
+│   │   │       ├── GitHubSettings.tsx    # GitHub token management
 │   │   │       └── RemoteAccess.tsx
 │   │   ├── hooks/
 │   │   │   ├── useTasks.ts
