@@ -605,7 +605,7 @@ The web UI stores the user's provider preference in `localStorage` under `geoff-
 
 ## GitHub API Integration
 
-The GitHub integration provides repository status, branch management, pull requests, issues, and commit history through the orchestrator API.
+The GitHub integration provides a dedicated tab with repository status, branch management, pull requests (with full review workflow), issues, commit history, and task-issue sync through the orchestrator API.
 
 ### Architecture
 
@@ -632,12 +632,19 @@ The GitHub integration provides repository status, branch management, pull reque
 │  /api/github/{project_id}/branches  → git branch listing        │
 │  /api/github/{project_id}/commits   → git log                   │
 │  /api/github/{project_id}/pulls     → gh pr list                │
+│  /api/github/{project_id}/pulls/:n  → gh pr view (detail)       │
+│  /api/github/{project_id}/pulls/:n/files → gh pr diff (patches) │
 │  /api/github/{project_id}/issues    → gh issue list             │
 │                                                                  │
-│  POST /api/github/{project_id}/branches     → git checkout -b   │
-│  POST /api/github/{project_id}/branches/checkout → git checkout │
-│  POST /api/github/{project_id}/pulls        → gh pr create      │
-│  POST /api/github/{project_id}/issues       → gh issue create   │
+│  POST .../branches          → git checkout -b                    │
+│  POST .../branches/checkout → git checkout                       │
+│  POST .../pulls             → gh pr create                       │
+│  POST .../pulls/:n/comment  → gh pr comment                     │
+│  POST .../pulls/:n/review   → gh pr review                      │
+│  POST .../pulls/:n/close    → gh pr close                       │
+│  POST .../pulls/:n/merge    → gh pr merge                       │
+│  POST .../issues            → gh issue create                    │
+│  POST .../sync              → task ↔ issue bidirectional sync    │
 └─────────────────────────────────────────────────────────────────┘
             │                    │
             │ subprocess         │ subprocess
@@ -660,6 +667,8 @@ All GitHub endpoints are defined in `orchestrator/src/orchestrator/api/github.py
 | GET | `/api/github/{project_id}/branches` | List all branches | `git` CLI |
 | GET | `/api/github/{project_id}/commits` | Recent commit history | `git` CLI |
 | GET | `/api/github/{project_id}/pulls` | List pull requests | `gh` CLI |
+| GET | `/api/github/{project_id}/pulls/{pr_number}` | Full PR detail (reviews, comments, labels, stats) | `gh` CLI |
+| GET | `/api/github/{project_id}/pulls/{pr_number}/files` | Changed files with unified diff patches | `gh` CLI |
 | GET | `/api/github/{project_id}/issues` | List issues | `gh` CLI |
 
 #### Write Endpoints
@@ -669,7 +678,12 @@ All GitHub endpoints are defined in `orchestrator/src/orchestrator/api/github.py
 | POST | `/api/github/{project_id}/branches` | Create new branch | `git` CLI |
 | POST | `/api/github/{project_id}/branches/checkout` | Switch branches | `git` CLI |
 | POST | `/api/github/{project_id}/pulls` | Create pull request | `gh` CLI |
+| POST | `/api/github/{project_id}/pulls/{pr_number}/comment` | Add comment to a PR | `gh` CLI |
+| POST | `/api/github/{project_id}/pulls/{pr_number}/review` | Submit review (approve/request_changes) | `gh` CLI |
+| POST | `/api/github/{project_id}/pulls/{pr_number}/close` | Close a PR | `gh` CLI |
+| POST | `/api/github/{project_id}/pulls/{pr_number}/merge` | Merge a PR (merge/squash/rebase) | `gh` CLI |
 | POST | `/api/github/{project_id}/issues` | Create issue | `gh` CLI |
+| POST | `/api/github/{project_id}/sync` | Sync GitHub issues with linked tasks (bidirectional) | `gh` CLI + Supabase |
 
 ### Dependencies
 
@@ -681,7 +695,7 @@ The GitHub integration requires:
 
 ### Frontend Components
 
-New components added in `web/src/components/github/`:
+Components in `web/src/components/github/`:
 
 | Component | Description |
 |-----------|-------------|
@@ -689,9 +703,20 @@ New components added in `web/src/components/github/`:
 | `GitHubSettings.tsx` | Token management with validation |
 | `GitHubContext.tsx` | Task-GitHub linking display in TaskDetail |
 | `BranchSelector.tsx` | Branch listing and switching |
-| `PullRequestList.tsx` | PR listing with status |
+| `PullRequestList.tsx` | PR listing — clicking opens PRDetailModal |
+| `PRDetailModal.tsx` | Full PR detail view with 3 tabs: Overview, Files, Comments |
+| `PRDiffViewer.tsx` | Expandable per-file unified diffs with syntax coloring (additions/deletions/hunks) |
+| `PRComments.tsx` | Timeline of comments and reviews, with add-comment form |
+| `PRActions.tsx` | Review action bar: approve, request changes, merge (method picker), close, assign to agent |
+| `AssignToAgentDialog.tsx` | Assign PR to AI agent with 3 presets: Review & Comment, Fix Issues, Custom Prompt |
 | `IssueList.tsx` | Issue listing with labels |
 | `CommitHistory.tsx` | Recent commits display |
+
+Hook in `web/src/hooks/`:
+
+| Hook | Description |
+|------|-------------|
+| `useGitHubNotifications.ts` | Polls every 60s for new PRs, tracks seen PRs in localStorage, triggers task-issue sync |
 
 ### MCP Tools for Task-GitHub Linking
 
@@ -728,6 +753,10 @@ def task_set_branch(task_id: str, branch_name: str) -> dict:
     Updates the task's context.github.branch field.
     """
 ```
+
+#### Auto-Close Linked Issues
+
+When `complete_task` is called, the MCP server automatically closes any linked GitHub issue — if the project has `sync_issues` enabled in its settings. This uses `gh issue close` under the hood and adds a comment referencing the completed task.
 
 ### Task Context Schema
 
@@ -796,6 +825,52 @@ export interface GitHubIssue {
   labels: string[];
   url: string;
 }
+
+// PR Detail types (added in PR Review feature)
+export interface PRReview {
+  author: string;
+  state: string;       // 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED'
+  body: string;
+  submitted_at: string;
+}
+
+export interface PRComment {
+  author: string;
+  body: string;
+  created_at: string;
+}
+
+export interface PullRequestDetail extends PullRequest {
+  body: string;
+  labels: string[];
+  additions: number;
+  deletions: number;
+  changed_files: number;
+  mergeable: boolean;
+  review_status: string;
+  reviews: PRReview[];
+  comments: PRComment[];
+}
+
+export interface PRChangedFile {
+  filename: string;
+  status: string;      // 'added' | 'modified' | 'removed' | 'renamed'
+  additions: number;
+  deletions: number;
+  patch: string;       // Unified diff
+}
+
+export interface SyncResult {
+  task_id: string;
+  task_title: string;
+  issue_number: number;
+  action: string;
+}
+
+export interface SyncResponse {
+  synced: SyncResult[];
+  checked: number;
+}
 ```
 
 ### Error Handling
@@ -846,7 +921,8 @@ web/
     │   ├── useTasks.ts      # Task state
     │   ├── useAgents.ts     # Agent state (provider-aware)
     │   ├── useProjects.ts   # Project state
-    │   └── useChat.ts       # Chat session state
+    │   ├── useChat.ts       # Chat session state
+    │   └── useGitHubNotifications.ts  # PR polling + notification badge
     └── components/
         ├── tasks/
         │   ├── QuickAdd.tsx
@@ -858,12 +934,17 @@ web/
         │   └── ChatPanel.tsx # Interactive chat UI
         ├── files/
         │   └── FileBrowser.tsx  # Includes GitStatusBar
-        ├── github/              # NEW - GitHub integration components
+        ├── github/              # GitHub integration components
         │   ├── GitStatusBar.tsx
         │   ├── GitHubSettings.tsx
         │   ├── GitHubContext.tsx
         │   ├── BranchSelector.tsx
         │   ├── PullRequestList.tsx
+        │   ├── PRDetailModal.tsx
+        │   ├── PRDiffViewer.tsx
+        │   ├── PRComments.tsx
+        │   ├── PRActions.tsx
+        │   ├── AssignToAgentDialog.tsx
         │   ├── IssueList.tsx
         │   └── CommitHistory.tsx
         ├── projects/

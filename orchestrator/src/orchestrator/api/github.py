@@ -3,6 +3,7 @@
 import os
 import subprocess
 import re
+import json
 from typing import Optional, List
 from datetime import datetime
 
@@ -120,6 +121,77 @@ class CreateIssueRequest(BaseModel):
     title: str
     body: Optional[str] = ""
     labels: List[str] = []
+
+
+class PRReview(BaseModel):
+    """GitHub PR review."""
+    id: int
+    author: str
+    state: str
+    body: str
+    submitted_at: str
+
+
+class PRComment(BaseModel):
+    """GitHub PR comment."""
+    id: int
+    author: str
+    body: str
+    created_at: str
+    path: Optional[str] = None
+    line: Optional[int] = None
+
+
+class PullRequestDetail(BaseModel):
+    """Detailed pull request information."""
+    number: int
+    title: str
+    state: str
+    author: str
+    created_at: str
+    url: str
+    head_branch: str
+    base_branch: str
+    body: str = ""
+    additions: int = 0
+    deletions: int = 0
+    changed_files: int = 0
+    mergeable: bool = False
+    review_status: str = "pending"
+    labels: List[str] = []
+    reviews: List[PRReview] = []
+    comments: List[PRComment] = []
+
+
+class PRChangedFile(BaseModel):
+    """A file changed in a PR."""
+    filename: str
+    status: str
+    additions: int = 0
+    deletions: int = 0
+    patch: str = ""
+
+
+class PRFilesResponse(BaseModel):
+    """Response for PR changed files."""
+    files: List[PRChangedFile]
+    count: int
+
+
+class PRCommentRequest(BaseModel):
+    """Request to add a comment to a PR."""
+    body: str
+
+
+class PRReviewRequest(BaseModel):
+    """Request to submit a PR review."""
+    event: str  # 'approve' | 'request_changes' | 'comment'
+    body: Optional[str] = ""
+
+
+class PRMergeRequest(BaseModel):
+    """Request to merge a PR."""
+    method: Optional[str] = "merge"  # 'merge' | 'squash' | 'rebase'
 
 
 class TokenValidationRequest(BaseModel):
@@ -824,3 +896,354 @@ async def update_github_settings(
         auto_create_pr=github_settings.get("auto_create_pr", False),
         sync_issues=github_settings.get("sync_issues", False),
     )
+
+
+# ============================================================================
+# PR Detail Endpoints (Phase 1)
+# ============================================================================
+
+@router.get("/{project_id}/pulls/{pr_number}", response_model=PullRequestDetail)
+async def get_pull_request_detail(
+    project_id: str,
+    pr_number: int,
+    _: str = Depends(verify_api_key),
+) -> PullRequestDetail:
+    """Get detailed information about a specific pull request."""
+    project_path = get_project_path(project_id)
+    if not project_path:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    fields = "number,title,state,author,createdAt,url,headRefName,baseRefName,body,additions,deletions,changedFiles,mergeable,labels,reviews,comments,reviewDecision"
+    stdout, stderr, code = run_gh_command(
+        project_path,
+        ["pr", "view", str(pr_number), "--json", fields]
+    )
+
+    if code != 0:
+        raise HTTPException(status_code=500, detail=f"Failed to get PR details: {stderr}")
+
+    try:
+        pr = json.loads(stdout)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to parse PR data")
+
+    author_login = pr.get("author", {}).get("login", "unknown") if isinstance(pr.get("author"), dict) else "unknown"
+    labels = [l.get("name", "") for l in pr.get("labels", []) if isinstance(l, dict)]
+
+    reviews = []
+    for r in pr.get("reviews", []):
+        reviews.append(PRReview(
+            id=r.get("id", 0) if isinstance(r.get("id"), int) else 0,
+            author=r.get("author", {}).get("login", "unknown") if isinstance(r.get("author"), dict) else "unknown",
+            state=r.get("state", "").lower(),
+            body=r.get("body", ""),
+            submitted_at=r.get("submittedAt", ""),
+        ))
+
+    comments = []
+    for c in pr.get("comments", []):
+        comments.append(PRComment(
+            id=c.get("id", 0) if isinstance(c.get("id"), int) else 0,
+            author=c.get("author", {}).get("login", "unknown") if isinstance(c.get("author"), dict) else "unknown",
+            body=c.get("body", ""),
+            created_at=c.get("createdAt", ""),
+        ))
+
+    review_decision = pr.get("reviewDecision", "").lower()
+    if review_decision == "approved":
+        review_status = "approved"
+    elif review_decision == "changes_requested":
+        review_status = "changes_requested"
+    else:
+        review_status = "pending"
+
+    return PullRequestDetail(
+        number=pr.get("number", pr_number),
+        title=pr.get("title", ""),
+        state=pr.get("state", "").lower(),
+        author=author_login,
+        created_at=pr.get("createdAt", ""),
+        url=pr.get("url", ""),
+        head_branch=pr.get("headRefName", ""),
+        base_branch=pr.get("baseRefName", ""),
+        body=pr.get("body", ""),
+        additions=pr.get("additions", 0),
+        deletions=pr.get("deletions", 0),
+        changed_files=pr.get("changedFiles", 0),
+        mergeable=pr.get("mergeable", "") == "MERGEABLE",
+        review_status=review_status,
+        labels=labels,
+        reviews=reviews,
+        comments=comments,
+    )
+
+
+@router.get("/{project_id}/pulls/{pr_number}/files", response_model=PRFilesResponse)
+async def get_pull_request_files(
+    project_id: str,
+    pr_number: int,
+    _: str = Depends(verify_api_key),
+) -> PRFilesResponse:
+    """Get changed files and diffs for a pull request."""
+    project_path = get_project_path(project_id)
+    if not project_path:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    stdout, stderr, code = run_gh_command(
+        project_path,
+        ["pr", "diff", str(pr_number), "--name-only"]
+    )
+
+    if code != 0:
+        raise HTTPException(status_code=500, detail=f"Failed to get PR files: {stderr}")
+
+    filenames = [f for f in stdout.split("\n") if f.strip()]
+
+    diff_stdout, diff_stderr, diff_code = run_gh_command(
+        project_path,
+        ["pr", "diff", str(pr_number)],
+        timeout=60
+    )
+
+    if diff_code != 0:
+        raise HTTPException(status_code=500, detail=f"Failed to get PR diff: {diff_stderr}")
+
+    # Parse unified diff into per-file patches
+    file_patches: dict[str, str] = {}
+    current_file = None
+    current_patch_lines: list[str] = []
+
+    for line in diff_stdout.split("\n"):
+        if line.startswith("diff --git"):
+            if current_file:
+                file_patches[current_file] = "\n".join(current_patch_lines)
+            parts = line.split(" b/", 1)
+            current_file = parts[1] if len(parts) > 1 else None
+            current_patch_lines = [line]
+        elif current_file:
+            current_patch_lines.append(line)
+
+    if current_file:
+        file_patches[current_file] = "\n".join(current_patch_lines)
+
+    files = []
+    for fname in filenames:
+        patch = file_patches.get(fname, "")
+        additions = 0
+        deletions = 0
+        for pline in patch.split("\n"):
+            if pline.startswith("+") and not pline.startswith("+++"):
+                additions += 1
+            elif pline.startswith("-") and not pline.startswith("---"):
+                deletions += 1
+
+        status = "modified"
+        if "--- /dev/null" in patch:
+            status = "added"
+        elif "+++ /dev/null" in patch:
+            status = "deleted"
+        elif "rename from" in patch:
+            status = "renamed"
+
+        files.append(PRChangedFile(
+            filename=fname,
+            status=status,
+            additions=additions,
+            deletions=deletions,
+            patch=patch,
+        ))
+
+    return PRFilesResponse(files=files, count=len(files))
+
+
+# ============================================================================
+# PR Review Action Endpoints (Phase 2)
+# ============================================================================
+
+@router.post("/{project_id}/pulls/{pr_number}/comment")
+async def add_pr_comment(
+    project_id: str,
+    pr_number: int,
+    request: PRCommentRequest,
+    _: str = Depends(verify_api_key),
+):
+    """Add a comment to a pull request."""
+    project_path = get_project_path(project_id)
+    if not project_path:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    stdout, stderr, code = run_gh_command(
+        project_path,
+        ["pr", "comment", str(pr_number), "--body", request.body]
+    )
+
+    if code != 0:
+        raise HTTPException(status_code=400, detail=f"Failed to add comment: {stderr}")
+
+    return {"success": True, "message": "Comment added"}
+
+
+@router.post("/{project_id}/pulls/{pr_number}/review")
+async def submit_pr_review(
+    project_id: str,
+    pr_number: int,
+    request: PRReviewRequest,
+    _: str = Depends(verify_api_key),
+):
+    """Submit a review on a pull request."""
+    project_path = get_project_path(project_id)
+    if not project_path:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    args = ["pr", "review", str(pr_number)]
+
+    if request.event == "approve":
+        args.append("--approve")
+    elif request.event == "request_changes":
+        args.append("--request-changes")
+    elif request.event == "comment":
+        args.append("--comment")
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid review event: {request.event}")
+
+    if request.body:
+        args.extend(["--body", request.body])
+
+    stdout, stderr, code = run_gh_command(project_path, args)
+
+    if code != 0:
+        raise HTTPException(status_code=400, detail=f"Failed to submit review: {stderr}")
+
+    return {"success": True, "message": f"Review submitted: {request.event}"}
+
+
+@router.post("/{project_id}/pulls/{pr_number}/close")
+async def close_pull_request(
+    project_id: str,
+    pr_number: int,
+    _: str = Depends(verify_api_key),
+):
+    """Close a pull request."""
+    project_path = get_project_path(project_id)
+    if not project_path:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    stdout, stderr, code = run_gh_command(
+        project_path,
+        ["pr", "close", str(pr_number)]
+    )
+
+    if code != 0:
+        raise HTTPException(status_code=400, detail=f"Failed to close PR: {stderr}")
+
+    return {"success": True, "message": f"PR #{pr_number} closed"}
+
+
+@router.post("/{project_id}/pulls/{pr_number}/merge")
+async def merge_pull_request(
+    project_id: str,
+    pr_number: int,
+    request: PRMergeRequest,
+    _: str = Depends(verify_api_key),
+):
+    """Merge a pull request."""
+    project_path = get_project_path(project_id)
+    if not project_path:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    args = ["pr", "merge", str(pr_number)]
+
+    if request.method == "squash":
+        args.append("--squash")
+    elif request.method == "rebase":
+        args.append("--rebase")
+    else:
+        args.append("--merge")
+
+    stdout, stderr, code = run_gh_command(project_path, args)
+
+    if code != 0:
+        raise HTTPException(status_code=400, detail=f"Failed to merge PR: {stderr}")
+
+    return {"success": True, "message": f"PR #{pr_number} merged via {request.method}"}
+
+
+# ============================================================================
+# GitHub Sync Endpoint (Phase 4)
+# ============================================================================
+
+@router.post("/{project_id}/sync")
+async def sync_github_state(
+    project_id: str,
+    _: str = Depends(verify_api_key),
+):
+    """Check linked GitHub issues and sync task status."""
+    supabase = get_supabase_client()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    project_path = get_project_path(project_id)
+    if not project_path:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    proj_result = supabase.table("projects").select("settings").eq("id", project_id).execute()
+    if not proj_result.data:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    settings = (proj_result.data[0].get("settings") or {}).get("github", {})
+    if not settings.get("sync_issues", False):
+        return {"synced": [], "count": 0, "message": "Issue sync is disabled for this project"}
+
+    tasks_result = (
+        supabase.table("tasks")
+        .select("id,title,status,context")
+        .eq("project_id", project_id)
+        .neq("status", "done")
+        .neq("status", "failed")
+        .execute()
+    )
+
+    synced = []
+    for task in tasks_result.data or []:
+        context = task.get("context") or {}
+        github_info = context.get("github", {})
+        linked_issue = github_info.get("linked_issue")
+        repo_url = github_info.get("repo_url")
+
+        if not linked_issue or not repo_url:
+            continue
+
+        owner, repo = parse_remote_url(repo_url)
+        if not owner or not repo:
+            continue
+
+        stdout, stderr, code = run_gh_command(
+            project_path,
+            ["issue", "view", str(linked_issue), "--repo", f"{owner}/{repo}", "--json", "state"]
+        )
+
+        if code != 0:
+            continue
+
+        try:
+            issue_data = json.loads(stdout)
+        except json.JSONDecodeError:
+            continue
+
+        issue_state = issue_data.get("state", "").lower()
+
+        if issue_state == "closed" and task["status"] != "done":
+            supabase.table("tasks").update({
+                "status": "done",
+                "result": f"Auto-completed: linked GitHub issue #{linked_issue} was closed.",
+                "completed_at": datetime.utcnow().isoformat(),
+            }).eq("id", task["id"]).execute()
+
+            synced.append({
+                "task_id": task["id"],
+                "task_title": task["title"],
+                "issue_number": linked_issue,
+                "action": "completed",
+            })
+
+    return {"synced": synced, "count": len(synced)}

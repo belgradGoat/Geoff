@@ -11,12 +11,18 @@ import { ProviderSettings } from './components/settings/ProviderSettings'
 import { AllowedPathsSettings } from './components/settings/AllowedPathsSettings'
 import { AgentChat } from './components/chat/AgentChat'
 import { GitHubSettings } from './components/github/GitHubSettings'
+import { PullRequestList } from './components/github/PullRequestList'
+import { IssueList } from './components/github/IssueList'
+import { CommitHistory } from './components/github/CommitHistory'
+import { GitStatusBar } from './components/github/GitStatusBar'
+import { useGitHubNotifications } from './hooks/useGitHubNotifications'
 
-type Tab = 'tasks' | 'files' | 'settings' | 'chat'
+type Tab = 'tasks' | 'files' | 'settings' | 'chat' | 'github'
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'tasks', label: 'Tasks' },
   { id: 'chat', label: 'Chat' },
+  { id: 'github', label: 'GitHub' },
   { id: 'files', label: 'Files' },
   { id: 'settings', label: 'Settings' },
 ]
@@ -24,7 +30,7 @@ const tabs: { id: Tab; label: string }[] = [
 // Helper to get stored tab from localStorage
 function getStoredTab(): Tab {
   const stored = localStorage.getItem('geoff-active-tab')
-  if (stored && ['tasks', 'files', 'settings', 'chat'].includes(stored)) {
+  if (stored && ['tasks', 'files', 'settings', 'chat', 'github'].includes(stored)) {
     return stored as Tab
   }
   return 'tasks'
@@ -35,6 +41,7 @@ function App() {
   const { fetchProjects } = useProjects()
   const [activeTab, setActiveTab] = useState<Tab>(getStoredTab)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { newPRCount, markAllSeen } = useGitHubNotifications(projectFilter)
 
   // Persist active tab to localStorage
   useEffect(() => {
@@ -89,14 +96,22 @@ function App() {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                  onClick={() => {
+                    setActiveTab(tab.id)
+                    if (tab.id === 'github') markAllSeen()
+                  }}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-all relative ${
                     activeTab === tab.id
                       ? 'bg-geoff-accent text-white'
                       : 'text-geoff-text-muted hover:text-geoff-text hover:bg-geoff-surface'
                   }`}
                 >
                   {tab.label}
+                  {tab.id === 'github' && newPRCount > 0 && activeTab !== 'github' && (
+                    <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                      {newPRCount}
+                    </span>
+                  )}
                 </button>
               ))}
             </nav>
@@ -128,6 +143,7 @@ function App() {
                       onClick={() => {
                         setActiveTab(tab.id)
                         setMobileMenuOpen(false)
+                        if (tab.id === 'github') markAllSeen()
                       }}
                       className={`w-full text-left px-4 py-3 text-sm font-medium transition-all ${
                         activeTab === tab.id
@@ -136,6 +152,11 @@ function App() {
                       }`}
                     >
                       {tab.label}
+                      {tab.id === 'github' && newPRCount > 0 && activeTab !== 'github' && (
+                        <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                          {newPRCount}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -190,6 +211,21 @@ function App() {
               <RemoteAccess />
               <AllowedPathsSettings />
             </div>
+          </div>
+        )}
+
+        {activeTab === 'github' && (
+          <div className="space-y-6">
+            <ProjectSelector />
+            <GitStatusBar projectId={projectFilter} />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <PullRequestList projectId={projectFilter} />
+              <IssueList projectId={projectFilter} />
+            </div>
+
+            <CommitHistory projectId={projectFilter} />
+            <AgentPanel />
           </div>
         )}
 

@@ -91,7 +91,10 @@ For remote access from your phone, use your Tailscale IP (shown after setup).
 | **Browse and view files** | Navigate your computer filesystem |
 | **View code** | Read files to provide context |
 | **Create folders** | Set up new project directories |
-| **Interact with Github** | Push/Pull to Github, create new branches |
+| **GitHub dashboard** | View PRs, issues, branches, and commits in a dedicated tab |
+| **Review PRs** | View diffs, approve, request changes, merge — all from your phone |
+| **Assign PRs to agents** | Have an AI agent review or fix a PR for you |
+| **Task ↔ Issue sync** | Completing a task closes the linked GitHub issue, and vice versa |
 
 ---
 

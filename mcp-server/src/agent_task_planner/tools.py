@@ -1,9 +1,43 @@
 """MCP tool implementations for task management."""
 
+import re
+import subprocess
 from typing import Optional
 from uuid import UUID
 
 from .db import get_db
+
+
+def _parse_repo_url(url: str) -> tuple:
+    """Parse owner/repo from a GitHub URL."""
+    ssh_match = re.match(r"git@github\.com:(.+)/(.+?)(?:\.git)?$", url)
+    if ssh_match:
+        return ssh_match.group(1), ssh_match.group(2)
+    https_match = re.match(r"https://github\.com/(.+)/(.+?)(?:\.git)?$", url)
+    if https_match:
+        return https_match.group(1), https_match.group(2)
+    return None, None
+
+
+def _close_github_issue(repo_url: str, issue_number: int, comment: str) -> bool:
+    """Close a GitHub issue using gh CLI. Returns True on success."""
+    owner, repo = _parse_repo_url(repo_url)
+    if not owner or not repo:
+        return False
+    try:
+        subprocess.run(
+            ["gh", "issue", "comment", str(issue_number),
+             "--repo", f"{owner}/{repo}", "--body", comment],
+            capture_output=True, text=True, timeout=30, check=True
+        )
+        subprocess.run(
+            ["gh", "issue", "close", str(issue_number),
+             "--repo", f"{owner}/{repo}"],
+            capture_output=True, text=True, timeout=30, check=True
+        )
+        return True
+    except Exception:
+        return False
 
 
 # =============================================================================
@@ -428,7 +462,35 @@ def complete_task(task_id: str, agent_id: str, result: Optional[str] = None) -> 
         }
     ).execute()
 
-    return {"success": True, "task": query_result.data[0]}
+    # Auto-close linked GitHub issue if sync is enabled
+    task_data = query_result.data[0]
+    context = task_data.get("context") or {}
+    github_info = context.get("github", {})
+    linked_issue = github_info.get("linked_issue")
+    repo_url = github_info.get("repo_url")
+
+    if linked_issue and repo_url:
+        # Check if project has sync_issues enabled
+        project_id = task_data.get("project_id")
+        if project_id:
+            try:
+                proj = db.table("projects").select("settings").eq("id", project_id).execute()
+                if proj.data:
+                    settings = (proj.data[0].get("settings") or {}).get("github", {})
+                    if settings.get("sync_issues", False):
+                        comment = f"Closed automatically — task completed.\n\nResult: {result or 'No details provided.'}"
+                        success = _close_github_issue(repo_url, linked_issue, comment)
+                        if not success:
+                            db.table("task_logs").insert({
+                                "task_id": task_id,
+                                "event_type": "warning",
+                                "message": f"Failed to close linked GitHub issue #{linked_issue}",
+                                "agent_id": agent_id,
+                            }).execute()
+            except Exception:
+                pass  # Don't fail task completion due to sync issues
+
+    return {"success": True, "task": task_data}
 
 
 def fail_task(task_id: str, agent_id: str, error_message: str, retry: bool = True) -> dict:

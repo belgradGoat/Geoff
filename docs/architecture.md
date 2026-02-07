@@ -347,6 +347,17 @@ POST   /api/github/:project_id/branches    # Create new branch
 POST   /api/github/:project_id/branches/checkout # Switch branch
 POST   /api/github/:project_id/pulls       # Create pull request
 POST   /api/github/:project_id/issues      # Create issue
+
+# PR Detail & Review
+GET    /api/github/:project_id/pulls/:pr_number          # Full PR detail (reviews, comments, stats)
+GET    /api/github/:project_id/pulls/:pr_number/files    # Changed files with unified diff
+POST   /api/github/:project_id/pulls/:pr_number/comment  # Add comment to PR
+POST   /api/github/:project_id/pulls/:pr_number/review   # Submit review (approve/request_changes)
+POST   /api/github/:project_id/pulls/:pr_number/close    # Close PR
+POST   /api/github/:project_id/pulls/:pr_number/merge    # Merge PR (merge/squash/rebase)
+
+# Task ↔ Issue Sync
+POST   /api/github/:project_id/sync       # Sync GitHub issues with linked tasks
 ```
 
 #### Live Output Streaming
@@ -501,7 +512,7 @@ Tools exposed to AI agents:
 ### Mutation Tools
 - `claim_task(id, agent_id)` - Mark task as assigned, prevents double-work
 - `update_progress(id, note)` - Add progress note, keeps status as in_progress
-- `complete_task(id, summary)` - Mark done, record completion summary
+- `complete_task(id, summary)` - Mark done, record completion summary. Auto-closes linked GitHub issue if project has `sync_issues` enabled
 - `fail_task(id, reason)` - Mark failed with diagnosis
 - `add_subtask(parent_id, title, description, acceptance_criteria)` - Break down work
 - `add_note(id, content)` - Add observation without status change
@@ -519,27 +530,40 @@ Tools exposed to AI agents:
 
 ## Web UI Features
 
-### Mobile-First Capture View
+### Tab Layout
+
+The UI has 5 tabs: **Tasks | Chat | GitHub | Files | Settings**
+
+### Tasks Tab
 - Quick add: title only, defaults to queued/medium priority
 - Tap to expand: add description, priority, dependencies
-- Voice input button (browser native)
-- Swipe actions: quick priority change
-
-### Desktop Management View
-- Kanban board (by status)
-- List view with filters
-- Dependency graph visualization
 - Task detail panel with full editing
-- Batch selection for "tonight's run"
 - Log viewer per task
 
-### Agent Control Panel
-- Launch agent button (one-click start)
-- Agent status cards (running, idle, stopped, crashed)
-- Live output terminal (WebSocket stream)
-- Stop/restart controls per agent
-- Batch launch: "Run all ready tasks"
-- Resource monitor (CPU/memory of agent processes)
+### Chat Tab
+- Interactive conversation sessions with AI agents
+- Slash command support
+- Message history
+
+### GitHub Tab
+- **PR list** with clickable detail modals (overview, files, comments)
+- **PR review actions**: approve, request changes, merge (method picker), close
+- **Assign PR to agent**: review & comment, fix issues, or custom prompt
+- **Issue list** with labels and state
+- **Branch management** with create/switch
+- **Commit history**
+- **Git status bar** (branch, modified files, ahead/behind)
+- **Notification badge** shows count of new PRs since last visit
+
+### Files Tab
+- Browse project filesystem
+- View code files
+
+### Settings Tab
+- Provider configuration
+- GitHub settings
+- Allowed paths
+- Remote access
 
 ### Shared Features
 - Real-time sync (Supabase subscriptions)
@@ -682,6 +706,11 @@ AgentTaskPlanner/
 │   │   │   │   ├── GitHubContext.tsx     # Task-GitHub linking
 │   │   │   │   ├── BranchSelector.tsx    # Branch listing/switching
 │   │   │   │   ├── PullRequestList.tsx   # PR listing
+│   │   │   │   ├── PRDetailModal.tsx     # Full PR detail view (tabs: overview/files/comments)
+│   │   │   │   ├── PRDiffViewer.tsx      # Expandable per-file unified diffs
+│   │   │   │   ├── PRComments.tsx        # Comment/review timeline + add comment
+│   │   │   │   ├── PRActions.tsx         # Review actions (approve/request changes/merge/close)
+│   │   │   │   ├── AssignToAgentDialog.tsx # Assign PR to AI agent with preset prompts
 │   │   │   │   ├── IssueList.tsx         # Issue listing
 │   │   │   │   └── CommitHistory.tsx     # Commit history
 │   │   │   └── settings/       # Settings components
@@ -691,7 +720,8 @@ AgentTaskPlanner/
 │   │   ├── hooks/
 │   │   │   ├── useTasks.ts
 │   │   │   ├── useAgents.ts
-│   │   │   └── useAgentStream.ts  # WebSocket hook
+│   │   │   ├── useAgentStream.ts  # WebSocket hook
+│   │   │   └── useGitHubNotifications.ts  # PR polling + notification badge
 │   │   ├── lib/
 │   │   │   ├── supabase.ts
 │   │   │   └── orchestrator.ts    # Orchestrator API client

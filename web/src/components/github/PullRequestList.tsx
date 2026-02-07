@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { orchestrator, PullRequest, CreatePullRequestRequest } from '../../lib/orchestrator'
+import { PRDetailModal } from './PRDetailModal'
 
 interface PullRequestListProps {
   projectId: string | null
@@ -12,6 +13,7 @@ export function PullRequestList({ projectId }: PullRequestListProps) {
   const [filter, setFilter] = useState<'open' | 'closed' | 'all'>('open')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [selectedPR, setSelectedPR] = useState<number | null>(null)
 
   // Create PR form
   const [title, setTitle] = useState('')
@@ -110,12 +112,10 @@ export function PullRequestList({ projectId }: PullRequestListProps) {
       ) : (
         <div className="space-y-2">
           {pullRequests.map((pr) => (
-            <a
+            <button
               key={pr.number}
-              href={pr.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block p-3 bg-geoff-surface rounded-lg border border-geoff-border hover:border-geoff-accent transition-colors"
+              onClick={() => setSelectedPR(pr.number)}
+              className="block w-full text-left p-3 bg-geoff-surface rounded-lg border border-geoff-border hover:border-geoff-accent transition-colors"
             >
               <div className="flex items-start gap-3">
                 <span className={`px-2 py-0.5 text-xs rounded-full ${
@@ -139,12 +139,25 @@ export function PullRequestList({ projectId }: PullRequestListProps) {
                   </div>
                 </div>
                 <svg className="w-4 h-4 text-geoff-text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </div>
-            </a>
+            </button>
           ))}
         </div>
+      )}
+
+      {/* PR Detail Modal */}
+      {selectedPR && projectId && (
+        <PRDetailModal
+          projectId={projectId}
+          prNumber={selectedPR}
+          onClose={() => setSelectedPR(null)}
+          onPRUpdated={() => {
+            loadPullRequests()
+            setSelectedPR(null)
+          }}
+        />
       )}
 
       {/* Create PR Modal */}

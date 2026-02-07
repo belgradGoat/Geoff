@@ -10,11 +10,11 @@ You're at work. You have an idea for your side project. You pull out your phone,
 
 | Component | What It Does |
 |-----------|--------------|
-| **Web UI** | Mobile-friendly interface for tasks, files, agents, chat, and GitHub integration |
+| **Web UI** | Mobile-friendly interface with 5 tabs: Tasks, Chat, GitHub, Files, Settings |
 | **Orchestrator** | Runs on your Mac, launches AI agents (Claude, Codex, Gemini, OpenCode) |
 | **MCP Server** | Gives AI agents access to task tools and GitHub linking |
 | **Supabase** | Stores tasks, syncs everywhere |
-| **GitHub Integration** | View repo status, branches, PRs, issues; link tasks to GitHub artifacts |
+| **GitHub Integration** | Dedicated dashboard for PRs, issues, branches, commits; PR review & assign-to-agent; task-issue sync |
 
 ## How It Fits Together
 
@@ -51,7 +51,9 @@ Your Phone                         Your Mac (at home)
 - **[User Guide](userguide.md)** - Setup instructions, how to use each feature
 - **[Developer Guide](developerguide.md)** - Contributing and technical details
 - **[Architecture](architecture.md)** - Original design doc, data models, state machines
-- **[GitHub API Dev Plan](GithubApiDevPlan.md)** - GitHub integration design and implementation status
+- **[GitHub API Dev Plan](GithubApiDevPlan.md)** - GitHub integration design (Phase 1-4, implemented)
+- **[PR & Sync Plan](PullRequestsPlan.md)** - PR review dashboard, assign-to-agent, task-issue sync
+- **[Changelog](../CHANGELOG.md)** - Version history and recent changes
 
 ## Quick Setup
 

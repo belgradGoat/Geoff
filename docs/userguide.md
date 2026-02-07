@@ -246,7 +246,7 @@ sudo tailscale up
 
 ## Using the Web UI
 
-The web UI is available at `http://localhost:4011` and has four main tabs:
+The web UI is available at `http://localhost:4011` and has five main tabs:
 
 ### Navigation Tabs
 
@@ -254,8 +254,11 @@ The web UI is available at `http://localhost:4011` and has four main tabs:
 |-----|-------------|
 | **Tasks** | Task management, quick add, and agent launching |
 | **Chat** | Interactive conversations with AI agents |
+| **GitHub** | GitHub dashboard — PRs, issues, commits, branches, and PR review |
 | **Files** | Browse your Mac's filesystem, view file contents |
 | **Settings** | Remote access configuration, Tailscale setup |
+
+The GitHub tab shows a notification badge when new pull requests are detected on your repositories.
 
 ### Task List View
 
@@ -737,7 +740,7 @@ ORCHESTRATOR_OPENCODE_COMMAND=/path/to/opencode
 
 ## GitHub Integration
 
-Geoff integrates with GitHub to provide repository status, branch management, pull requests, and issue tracking directly within the UI.
+Geoff integrates with GitHub to provide a full GitHub dashboard with repository status, branch management, pull request review, issue tracking, and agent-powered PR workflows — all from your phone.
 
 ### Prerequisites
 
@@ -758,18 +761,29 @@ winget install --id GitHub.cli
 gh auth login
 ```
 
+### GitHub Tab
+
+The **GitHub** tab is your central dashboard for all repository activity. It shows:
+
+- **Git Status Bar** — current branch, modified/staged/untracked files, push/pull buttons
+- **Pull Requests** — list of open/closed PRs with click-to-review
+- **Issues** — list of open/closed issues
+- **Commit History** — recent commits timeline
+- **Active Sessions** — agents working on GitHub-related tasks
+
+The tab displays a **notification badge** when new pull requests are detected (polled every 60 seconds). The badge clears when you open the tab.
+
 ### Git Status Bar
 
-When viewing a Git repository in the **Files** tab, you'll see a status bar showing:
+The status bar appears on both the **GitHub** tab and the **Files** tab:
 
 | Information | Description |
 |-------------|-------------|
-| **Branch** | Current branch name |
+| **Branch** | Current branch name with dropdown to switch |
 | **Modified** | Number of modified files |
 | **Untracked** | Number of untracked files |
-| **Ahead/Behind** | Commits ahead/behind the remote |
-
-The status bar appears automatically when browsing a project directory that contains a `.git` folder.
+| **Staged** | Number of staged files |
+| **Ahead/Behind** | Commits ahead/behind the remote, with push/pull buttons |
 
 ### GitHub Settings
 
@@ -788,22 +802,44 @@ Configure GitHub tokens in the **Settings** tab:
 
 ### Branch Management
 
-View and manage branches from the File Browser:
+View and manage branches from the Git Status Bar:
 
-- **View branches**: See all repository branches
+- **View branches**: Click the branch name to see all branches
 - **Current branch**: Highlighted with a checkmark
 - **Switch branches**: Click a branch to check it out
-- **Create branch**: Create new branches from the UI
+- **Create branch**: Create new branches from the dropdown
 
-### Pull Requests
+### Pull Request Review
 
-View and create pull requests:
+Click any PR in the list to open the **PR Detail Modal** with three tabs:
 
-| Feature | Description |
-|---------|-------------|
-| **List PRs** | View open and closed pull requests |
-| **PR Details** | See title, author, status, and URL |
-| **Create PR** | Create a new PR for the current branch |
+| Tab | What It Shows |
+|-----|---------------|
+| **Overview** | Full description, merge status, labels, additions/deletions count |
+| **Files** | Changed files with expandable unified diffs (color-coded additions/deletions) |
+| **Comments** | Timeline of comments and reviews, with the ability to add new comments |
+
+**Review Actions** (available for open PRs):
+
+| Action | Description |
+|--------|-------------|
+| **Approve** | Submit an approval review |
+| **Request Changes** | Submit feedback with requested changes |
+| **Merge** | Merge the PR (choose merge, squash, or rebase) |
+| **Close** | Close the PR with confirmation |
+| **Assign to Agent** | Launch an AI agent to work on the PR |
+
+### Assign PR to Agent
+
+From any PR detail view, click **Assign to Agent** to launch an AI agent with one of three preset actions:
+
+| Action | What the Agent Does |
+|--------|-------------------|
+| **Review & Comment** | Reads the diff and leaves a detailed code review with suggestions |
+| **Fix Issues** | Checks out the PR branch, fixes problems, commits and pushes |
+| **Custom Prompt** | Your own instructions — the PR context is automatically included |
+
+The agent creates a task linked to the PR, and its progress is visible in the Active Sessions panel at the bottom of the GitHub tab.
 
 ### Issues
 
@@ -811,9 +847,8 @@ View and create GitHub issues:
 
 | Feature | Description |
 |---------|-------------|
-| **List Issues** | View open issues for the repository |
-| **Issue Details** | See title, labels, and status |
-| **Create Issue** | Create new issues from the UI |
+| **List Issues** | View open and closed issues with label badges |
+| **Create Issue** | Create new issues with title, description, and labels |
 
 ### Commit History
 
@@ -822,6 +857,19 @@ View recent commits for the repository, including:
 - Commit message
 - Author
 - Date
+
+### Task ↔ Issue Sync
+
+When enabled, Geoff keeps tasks and GitHub issues in sync:
+
+- **Task completed → Issue closes**: When an agent completes a task that's linked to a GitHub issue, the issue is automatically closed with a comment
+- **Issue closed → Task completes**: When someone closes a GitHub issue externally, the linked task in Geoff is automatically marked as done
+
+**To enable sync:**
+1. Go to **Settings** → **GitHub Settings**
+2. Toggle **Sync Issues** on
+
+Sync is checked every 60 seconds alongside PR notifications.
 
 ### Linking Tasks to GitHub
 
