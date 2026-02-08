@@ -1,5 +1,13 @@
 #Changelog
 
+## 02/07/26
+
+### Fixed
+- **start.sh** — Fixed virtual environment path to reference project root `env/` instead of non-existent `orchestrator/env/`
+- **start.sh** — Replaced `uv run uvicorn` with `python -m uvicorn` since `uv` is not installed, using the project's own venv Python
+
+---
+
 ## 02/06/26
 
 ### Added

@@ -41,14 +41,14 @@ fi
 if [ "$ORCH_RUNNING" != "true" ]; then
     echo -n "Starting orchestrator... "
     cd "$SCRIPT_DIR/orchestrator"
-    source .venv/bin/activate
+    source "$SCRIPT_DIR/env/bin/activate"
 
     # Load environment variables
     if [ -f "$SCRIPT_DIR/.env" ]; then
         export $(grep -v '^#' "$SCRIPT_DIR/.env" | xargs)
     fi
 
-    nohup uv run uvicorn orchestrator.main:app \
+    nohup python -m uvicorn orchestrator.main:app \
         --host ${ORCHESTRATOR_HOST:-0.0.0.0} \
         --port ${ORCHESTRATOR_PORT:-8080} \
         > "$SCRIPT_DIR/logs/orchestrator.log" 2>&1 &

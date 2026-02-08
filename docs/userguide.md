@@ -26,7 +26,7 @@ This guide covers how to use Geoff for managing tasks and orchestrating AI agent
 
 ### Prerequisites
 
-- Python 3.10+ and [uv](https://github.com/astral-sh/uv) (Python package manager)
+- Python 3.10+ with a virtual environment (`env/` in project root)
 - Node.js 18+ for the Web UI
 - A [Supabase](https://supabase.com) account (free tier works)
 - At least one AI CLI tool (Claude Code recommended)
@@ -117,8 +117,8 @@ This single file creates all tables, indexes, triggers, and RLS policies.
 
 ```bash
 cd mcp-server
-uv venv && source .venv/bin/activate
-uv pip install -e .
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
 ```
 
 #### 4. Add MCP Server to Claude Code
@@ -163,7 +163,8 @@ cd web && npm run dev
 
 Terminal 2 (Orchestrator):
 ```bash
-cd orchestrator && uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
+source env/bin/activate
+cd orchestrator && python -m uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
 ```
 
 Or use the start script:
@@ -198,9 +199,11 @@ Geoff works on Windows with a few configuration adjustments.
 - Git for Windows
 - Claude CLI (install from official Anthropic installer)
 
-**2. Install uv (Python package manager)**
+**2. Create a virtual environment**
 ```powershell
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+python -m venv env
+.\env\Scripts\activate
+pip install -r requirements.txt
 ```
 
 **3. Configure Claude CLI Path**
@@ -226,8 +229,9 @@ npm run dev
 
 PowerShell Terminal 2 (Orchestrator):
 ```powershell
+.\env\Scripts\activate
 cd orchestrator
-uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
+python -m uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
 ```
 
 ### Linux
@@ -1231,7 +1235,8 @@ server: {
 
 **Orchestrator**:
 ```bash
-uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
+source env/bin/activate
+cd orchestrator && python -m uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080
 ```
 
 #### Solution 3: Check Tailscale Status
@@ -1261,7 +1266,8 @@ curl -v http://100.x.y.z:8080/health
 The orchestrator needs to be restarted after code changes:
 ```bash
 # Stop the orchestrator (Ctrl+C) and restart
-uv run uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080 --reload
+source env/bin/activate
+cd orchestrator && python -m uvicorn orchestrator.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 The `--reload` flag auto-restarts on file changes.
