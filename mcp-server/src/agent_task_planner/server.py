@@ -26,6 +26,9 @@ from .tools import (
     github_link_task_to_pr,
     github_add_commit_to_task,
     github_set_task_branch,
+    # Chain integration tools
+    chain_stage_set_result,
+    chain_get_context,
 )
 
 # Create the FastMCP server
@@ -359,6 +362,41 @@ def task_set_branch(task_id: str, branch_name: str) -> dict:
         branch_name: The Git branch name (e.g., "feature/task-123")
     """
     return github_set_task_branch(task_id, branch_name)
+
+
+# =============================================================================
+# Chain Integration Tools
+# =============================================================================
+
+
+@mcp.tool()
+def chain_set_stage_result(execution_id: str, stage_name: str, result_data: dict) -> dict:
+    """
+    Set structured result data for a chain stage.
+
+    Called by agents running within a chain to report structured results.
+    This is more reliable than parsing stdout for structured data like QC results.
+
+    Args:
+        execution_id: The chain execution ID
+        stage_name: The stage name (e.g., 'qc_review', 'deep_research')
+        result_data: Structured result data as a dict
+    """
+    return chain_stage_set_result(execution_id, stage_name, result_data)
+
+
+@mcp.tool()
+def chain_context(execution_id: str) -> dict:
+    """
+    Get accumulated context from a chain execution.
+
+    Allows agents within a chain to read results from prior stages.
+    Useful when an agent needs context from earlier stages.
+
+    Args:
+        execution_id: The chain execution ID
+    """
+    return chain_get_context(execution_id)
 
 
 def main():

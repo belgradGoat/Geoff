@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Task, TaskStatus, TaskComplexity, TaskAttachment } from '../../lib/supabase'
 import { useTasks } from '../../hooks/useTasks'
+import { useChains, ChainType } from '../../hooks/useChains'
+import { ChainProgress } from '../chains/ChainProgress'
 
 const statusConfig: Record<TaskStatus, { label: string; color: string; bg: string }> = {
   queued: { label: 'Queued', color: 'text-geoff-text-muted', bg: 'bg-geoff-card' },
@@ -90,9 +92,15 @@ export interface TaskItemProps {
 
 export function TaskItem({ task, onLaunchTask, isLaunching }: TaskItemProps) {
   const { updateTask, deleteTask } = useTasks()
+  const { getChainForTask, executeChain, stopChain } = useChains()
   const [isExpanded, setIsExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editedTask, setEditedTask] = useState<Partial<Task>>({})
+  const [showChainMenu, setShowChainMenu] = useState(false)
+  const [isChainLoading, setIsChainLoading] = useState(false)
+
+  const chainExecution = getChainForTask(task.id)
+  const isChainRunning = chainExecution && (chainExecution.status === 'running' || chainExecution.status === 'pending')
 
   const config = statusConfig[task.status]
   const borderColor = priorityBorders[task.priority] || priorityBorders[0]
@@ -152,6 +160,23 @@ export function TaskItem({ task, onLaunchTask, isLaunching }: TaskItemProps) {
     setIsEditing(true)
   }
 
+  const handleRunChain = async (chainType: ChainType) => {
+    setShowChainMenu(false)
+    setIsChainLoading(true)
+    try {
+      await executeChain(task.id, chainType)
+    } finally {
+      setIsChainLoading(false)
+    }
+  }
+
+  const handleStopChain = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (chainExecution) {
+      await stopChain(chainExecution.id)
+    }
+  }
+
   return (
     <div
       className={`rounded-lg border-l-4 ${borderColor} transition-all ${
@@ -178,28 +203,80 @@ export function TaskItem({ task, onLaunchTask, isLaunching }: TaskItemProps) {
             <h3 className="font-medium text-geoff-text flex-1">{task.title}</h3>
           </div>
           <div className="flex items-center gap-2">
-            {canLaunch && (
+            {isChainRunning && (
               <button
-                onClick={handleLaunchClick}
-                disabled={isLaunching}
-                className={`p-1 rounded transition-colors ${
-                  isLaunching
-                    ? 'text-geoff-text-dim cursor-not-allowed'
-                    : 'text-geoff-accent hover:bg-geoff-accent-dim hover:text-geoff-accent'
-                }`}
-                title="Launch this task"
+                onClick={handleStopChain}
+                className="p-1 rounded transition-colors text-geoff-error hover:bg-geoff-error-dim"
+                title="Stop chain"
               >
-                {isLaunching ? (
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                )}
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 6h12v12H6z" />
+                </svg>
               </button>
+            )}
+            {canLaunch && !isChainRunning && (
+              <>
+                <button
+                  onClick={handleLaunchClick}
+                  disabled={isLaunching}
+                  className={`p-1 rounded transition-colors ${
+                    isLaunching
+                      ? 'text-geoff-text-dim cursor-not-allowed'
+                      : 'text-geoff-accent hover:bg-geoff-accent-dim hover:text-geoff-accent'
+                  }`}
+                  title="Launch this task"
+                >
+                  {isLaunching ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  )}
+                </button>
+                <div className="relative">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowChainMenu(!showChainMenu) }}
+                    disabled={isChainLoading}
+                    className={`p-1 rounded transition-colors ${
+                      isChainLoading
+                        ? 'text-geoff-text-dim cursor-not-allowed'
+                        : 'text-geoff-purple hover:bg-geoff-purple-dim'
+                    }`}
+                    title="Run with chain"
+                  >
+                    {isChainLoading ? (
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    )}
+                  </button>
+                  {showChainMenu && (
+                    <div className="absolute right-0 top-full mt-1 z-10 bg-geoff-surface border border-geoff-border rounded-lg shadow-lg py-1 min-w-[160px]">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRunChain('research') }}
+                        className="w-full text-left px-3 py-1.5 text-sm text-geoff-text hover:bg-geoff-card transition-colors"
+                      >
+                        Research Chain
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRunChain('development') }}
+                        className="w-full text-left px-3 py-1.5 text-sm text-geoff-text hover:bg-geoff-card transition-colors"
+                      >
+                        Development Chain
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
             <span className={`px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.color}`}>
               {config.label}
@@ -228,13 +305,17 @@ export function TaskItem({ task, onLaunchTask, isLaunching }: TaskItemProps) {
           )}
         </div>
 
-        {task.progress > 0 && task.status === 'in_progress' && (
+        {task.progress > 0 && task.status === 'in_progress' && !chainExecution && (
           <div className="mt-2 ml-6 h-1 bg-geoff-border rounded-full overflow-hidden">
             <div
               className="h-full bg-geoff-accent transition-all"
               style={{ width: `${task.progress}%` }}
             />
           </div>
+        )}
+
+        {chainExecution && (
+          <ChainProgress execution={chainExecution} compact={true} />
         )}
       </div>
 

@@ -853,6 +853,90 @@ def github_add_commit_to_task(task_id: str, commit_sha: str, message: Optional[s
     return {"success": True, "task": task.data, "added": False, "message": "Commit already linked"}
 
 
+# =============================================================================
+# Chain Integration Functions
+# =============================================================================
+
+
+def chain_stage_set_result(execution_id: str, stage_name: str, result_data: dict) -> dict:
+    """
+    Set structured result data for a chain stage (called by agents within a chain).
+
+    Args:
+        execution_id: The chain execution ID
+        stage_name: The stage name (e.g., 'qc_review')
+        result_data: Structured result data as a dict
+
+    Returns:
+        Success status
+    """
+    import json
+    db = get_db()
+
+    # Find the stage
+    stages = (
+        db.table("chain_stages")
+        .select("id, chain_execution_id")
+        .eq("chain_execution_id", execution_id)
+        .eq("stage_name", stage_name)
+        .execute()
+    )
+
+    if not stages.data:
+        return {"success": False, "error": f"Stage '{stage_name}' not found in execution {execution_id}"}
+
+    stage_id = stages.data[0]["id"]
+
+    result = (
+        db.table("chain_stages")
+        .update({
+            "result_data": result_data,
+            "result": json.dumps(result_data) if isinstance(result_data, dict) else str(result_data),
+        })
+        .eq("id", stage_id)
+        .execute()
+    )
+
+    if not result.data:
+        return {"success": False, "error": "Failed to update stage result"}
+
+    return {"success": True, "stage_id": stage_id}
+
+
+def chain_get_context(execution_id: str) -> dict:
+    """
+    Get accumulated context from a chain execution (called by agents within a chain).
+
+    This allows agents to read results from prior stages.
+
+    Args:
+        execution_id: The chain execution ID
+
+    Returns:
+        The accumulated context dict
+    """
+    db = get_db()
+
+    execution = (
+        db.table("chain_executions")
+        .select("context, status, current_stage_index, chain_type")
+        .eq("id", execution_id)
+        .single()
+        .execute()
+    )
+
+    if not execution.data:
+        return {"success": False, "error": f"Execution {execution_id} not found"}
+
+    return {
+        "success": True,
+        "context": execution.data.get("context", {}),
+        "status": execution.data.get("status"),
+        "current_stage_index": execution.data.get("current_stage_index"),
+        "chain_type": execution.data.get("chain_type"),
+    }
+
+
 def github_set_task_branch(task_id: str, branch_name: str) -> dict:
     """
     Set the working branch for a task.

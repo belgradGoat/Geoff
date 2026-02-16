@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useTasks } from './hooks/useTasks'
 import { useProjects } from './hooks/useProjects'
+import { useChains } from './hooks/useChains'
 import { QuickAdd } from './components/tasks/QuickAdd'
 import { ActiveTaskList, CompletedTaskList } from './components/tasks/TaskList'
 import { AgentPanel } from './components/agents/AgentPanel'
@@ -39,6 +40,7 @@ function getStoredTab(): Tab {
 function App() {
   const { fetchTasks, subscribeToChanges, projectFilter } = useTasks()
   const { fetchProjects } = useProjects()
+  const { fetchTemplates, fetchExecutions, subscribeToChanges: subscribeToChainChanges } = useChains()
   const [activeTab, setActiveTab] = useState<Tab>(getStoredTab)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { newPRCount, markAllSeen } = useGitHubNotifications(projectFilter)
@@ -69,6 +71,13 @@ function App() {
     const unsubscribe = subscribeToChanges()
     return unsubscribe
   }, [fetchTasks, subscribeToChanges])
+
+  useEffect(() => {
+    fetchTemplates()
+    fetchExecutions()
+    const unsubscribeChains = subscribeToChainChanges()
+    return unsubscribeChains
+  }, [fetchTemplates, fetchExecutions, subscribeToChainChanges])
 
   const selectedProject = useProjects.getState().projects.find(p => p.id === projectFilter)
 

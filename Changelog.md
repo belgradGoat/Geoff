@@ -1,5 +1,12 @@
 #Changelog
 
+## 02/15/26
+
+### Created first version of agentic chain
+
+- **Two modes of operation** - Research and development, each launching different mode of operation
+- **Early beta, needs feedback and more support** - Further testing needed
+
 ## 02/07/26
 
 ### Fixed

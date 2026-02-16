@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     # MCP Server Configuration (for spawned agents)
     mcp_python_path: str = os.getenv("MCP_PYTHON_PATH", "")
 
+    # Chain Execution Configuration
+    chain_default_provider: str = os.getenv("CHAIN_DEFAULT_PROVIDER", "claude")
+    chain_stage_timeout: int = int(os.getenv("CHAIN_STAGE_TIMEOUT", "3600"))  # 1 hour per stage
+    chain_max_concurrent: int = int(os.getenv("CHAIN_MAX_CONCURRENT", "3"))
+
     # Token Encryption Key (for GitHub tokens stored in database)
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     token_encryption_key: str = os.getenv("TOKEN_ENCRYPTION_KEY", "")

@@ -391,6 +391,11 @@ async def list_branches(
     if not project_path:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # Check if directory is a git repo
+    git_dir = os.path.join(project_path, ".git")
+    if not os.path.isdir(git_dir):
+        return BranchListResponse(branches=[], current_branch="", count=0)
+
     # Get current branch
     stdout, _, code = run_git_command(project_path, ["rev-parse", "--abbrev-ref", "HEAD"])
     current_branch = stdout if code == 0 else ""
@@ -484,6 +489,11 @@ async def list_commits(
     if not project_path:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    # Check if directory is a git repo
+    git_dir = os.path.join(project_path, ".git")
+    if not os.path.isdir(git_dir):
+        return CommitListResponse(commits=[], count=0)
+
     args = ["log", f"-{limit}", "--format=%H|%h|%s|%an|%ci"]
     if branch:
         args.append(branch)
@@ -529,6 +539,11 @@ async def list_pull_requests(
     args = ["pr", "list", "--json", "number,title,state,author,createdAt,url,headRefName,baseRefName", "--limit", str(limit)]
     if state != "all":
         args.extend(["--state", state])
+
+    # Check if directory is a git repo
+    git_dir = os.path.join(project_path, ".git")
+    if not os.path.isdir(git_dir):
+        return PullRequestListResponse(pull_requests=[], count=0)
 
     stdout, stderr, code = run_gh_command(project_path, args)
 
@@ -645,6 +660,11 @@ async def list_issues(
     project_path = get_project_path(project_id)
     if not project_path:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # Check if directory is a git repo
+    git_dir = os.path.join(project_path, ".git")
+    if not os.path.isdir(git_dir):
+        return IssueListResponse(issues=[], count=0)
 
     args = ["issue", "list", "--json", "number,title,state,labels,assignees,createdAt,url", "--limit", str(limit)]
     if state != "all":

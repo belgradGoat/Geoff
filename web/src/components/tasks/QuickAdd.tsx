@@ -2,6 +2,7 @@ import { useState, useRef, FormEvent, ChangeEvent } from 'react'
 import { useTasks } from '../../hooks/useTasks'
 import { useAgents } from '../../hooks/useAgents'
 import { useProjects } from '../../hooks/useProjects'
+import { useChains, ChainType } from '../../hooks/useChains'
 import { TaskAttachment } from '../../lib/supabase'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB per file
@@ -34,6 +35,7 @@ function getFileIcon(type: string): string {
 export function QuickAdd() {
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState(0)
+  const [chainType, setChainType] = useState<ChainType | 'none'>('none')
   const [attachments, setAttachments] = useState<TaskAttachment[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLaunching, setIsLaunching] = useState(false)
@@ -43,6 +45,7 @@ export function QuickAdd() {
   const addTask = useTasks((state) => state.addTask)
   const projectFilter = useTasks((state) => state.projectFilter)
   const { launchAgent, selectAgent } = useAgents()
+  const { executeChain } = useChains()
   const { projects } = useProjects()
   const selectedProject = projects.find(p => p.id === projectFilter)
 
@@ -108,9 +111,16 @@ export function QuickAdd() {
 
     setIsSubmitting(true)
     try {
-      await addTask(title.trim(), priority, undefined, undefined, attachments)
+      const task = await addTask(title.trim(), priority, undefined, undefined, attachments)
+
+      // If a chain type is selected, queue chain execution for this task
+      if (task && chainType !== 'none') {
+        await executeChain(task.id, chainType)
+      }
+
       setTitle('')
       setPriority(0)
+      setChainType('none')
       setAttachments([])
       setFileError(null)
     } finally {
@@ -186,6 +196,16 @@ Work through one task at a time. Be thorough and follow the task requirements.`
             <option value={2}>Medium</option>
             <option value={3}>High</option>
             <option value={4}>Urgent</option>
+          </select>
+          <select
+            value={chainType}
+            onChange={(e) => setChainType(e.target.value as ChainType | 'none')}
+            className="input flex-1 sm:flex-none sm:w-40"
+            disabled={isSubmitting}
+          >
+            <option value="none">No Chain</option>
+            <option value="research">Research Chain</option>
+            <option value="development">Dev Chain</option>
           </select>
           <button
             type="submit"
