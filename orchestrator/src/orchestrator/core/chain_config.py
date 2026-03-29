@@ -29,6 +29,7 @@ class ChainExecutionConfig:
     """Runtime configuration for a chain execution."""
 
     provider: str = "claude"
+    model: str | None = None  # e.g. "claude-sonnet-4-6", "claude-haiku-4-5-20251001"
     working_dir: str | None = None
     domain_context: str = ""
     system_prompt_prefix: str = ""

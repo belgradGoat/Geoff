@@ -88,6 +88,16 @@ async def execute_chain(
                 config.system_prompt_prefix = request.config["system_prompt_prefix"]
             if "stage_overrides" in request.config:
                 config.stage_overrides = request.config["stage_overrides"]
+            if "model" in request.config:
+                config.model = request.config["model"]
+
+        # Apply OSINT chain defaults if not explicitly overridden
+        if request.chain_type == "osint":
+            settings = get_settings()
+            if not config.working_dir:
+                config.working_dir = settings.osint_working_dir
+            if not config.model:
+                config.model = settings.osint_default_model
 
         execution_id = await ChainEngine.execute_chain(
             task_id=request.task_id,

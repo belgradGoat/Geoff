@@ -74,6 +74,18 @@ class Settings(BaseSettings):
     chain_stage_timeout: int = int(os.getenv("CHAIN_STAGE_TIMEOUT", "3600"))  # 1 hour per stage
     chain_max_concurrent: int = int(os.getenv("CHAIN_MAX_CONCURRENT", "3"))
 
+    # OSINT Chain Configuration
+    osint_working_dir: str = os.getenv("OSINT_WORKING_DIR", os.path.expanduser("~/Documents/GitHub/WebScrapper/WebScraper/eagle-journalist"))
+    osint_default_model: str = os.getenv("OSINT_DEFAULT_MODEL", "claude-sonnet-4-6")
+
+    # Voice Configuration
+    voice_stt_enabled: bool = os.getenv("VOICE_STT_ENABLED", "true").lower() == "true"
+    voice_tts_enabled: bool = os.getenv("VOICE_TTS_ENABLED", "true").lower() == "true"
+    voice_stt_model: str = os.getenv("VOICE_STT_MODEL", "mlx-community/VibeVoice-ASR-bf16")
+    voice_tts_model: str = os.getenv("VOICE_TTS_MODEL", "mlx-community/Kokoro-82M-bf16")
+    voice_tts_voice: str = os.getenv("VOICE_TTS_VOICE", "af_heart")
+    voice_tts_speed: float = float(os.getenv("VOICE_TTS_SPEED", "1.0"))
+
     # Token Encryption Key (for GitHub tokens stored in database)
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     token_encryption_key: str = os.getenv("TOKEN_ENCRYPTION_KEY", "")

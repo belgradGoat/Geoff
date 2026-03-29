@@ -75,7 +75,7 @@ export function ChainProgress({ execution, compact = true }: ChainProgressProps)
         {/* Chain type label */}
         <div className="flex items-center gap-2 mb-1.5">
           <span className="text-xs font-medium text-geoff-accent">
-            {execution.chain_type === 'research' ? 'Research Chain' : 'Development Chain'}
+            {execution.chain_type === 'research' ? 'Research Chain' : execution.chain_type === 'osint' ? 'OSINT Chain' : 'Development Chain'}
           </span>
           {execution.status === 'running' && (
             <span className="text-xs text-geoff-warning">Running</span>

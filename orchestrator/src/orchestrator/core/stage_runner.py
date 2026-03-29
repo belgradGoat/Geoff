@@ -60,6 +60,7 @@ class StageRunner:
                 working_dir=config.working_dir,
                 provider=config.provider,
                 task_title=agent_task_title,
+                model=config.model,
             )
         except Exception as e:
             return StageResult(

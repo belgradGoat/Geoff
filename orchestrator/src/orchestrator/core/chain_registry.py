@@ -62,10 +62,39 @@ DEVELOPMENT_CHAIN = ChainDefinition(
     ],
 )
 
+# Built-in OSINT Chain
+OSINT_CHAIN = ChainDefinition(
+    chain_type="osint",
+    name="OSINT Chain",
+    stages=[
+        StageDefinition(
+            name="reconnaissance",
+            stage_type="reconnaissance",
+            description="Gather intelligence from Telegram, Discord, and web sources",
+        ),
+        StageDefinition(
+            name="cross_reference",
+            stage_type="cross_reference",
+            description="Cross-reference findings across sources, verify claims, identify contradictions",
+        ),
+        StageDefinition(
+            name="analysis",
+            stage_type="osint_analysis",
+            description="Analyze patterns, assess significance, identify emerging threats or developments",
+        ),
+        StageDefinition(
+            name="synthesis",
+            stage_type="osint_synthesis",
+            description="Compile final intelligence brief with sourced findings and confidence levels",
+        ),
+    ],
+)
+
 # Registry of built-in chains
 _BUILTIN_CHAINS: dict[str, ChainDefinition] = {
     "research": RESEARCH_CHAIN,
     "development": DEVELOPMENT_CHAIN,
+    "osint": OSINT_CHAIN,
 }
 
 

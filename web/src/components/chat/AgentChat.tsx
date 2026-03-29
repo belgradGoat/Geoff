@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useChat, Message } from '../../hooks/useChat'
+import { useVoice } from '../../hooks/useVoice'
 import { useTasks } from '../../hooks/useTasks'
 import { useProjects } from '../../hooks/useProjects'
+import { VoiceControls } from './VoiceControls'
+import { TTSButton } from './TTSButton'
 
 export function AgentChat() {
   const {
@@ -16,12 +19,14 @@ export function AgentChat() {
     setupVisibilityListener
   } = useChat()
 
+  const { autoPlayTTS, ttsEnabled, speakText } = useVoice()
   const { projectFilter } = useTasks()
   const { projects } = useProjects()
   const selectedProject = projects.find(p => p.id === projectFilter)
 
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const lastMessageCountRef = useRef(messages.length)
 
   // Auto-scroll to bottom on new messages or streaming updates
   useEffect(() => {
@@ -33,6 +38,21 @@ export function AgentChat() {
     const cleanup = setupVisibilityListener()
     return cleanup
   }, [setupVisibilityListener])
+
+  // Auto-play TTS on new assistant messages
+  useEffect(() => {
+    if (autoPlayTTS && ttsEnabled && messages.length > lastMessageCountRef.current) {
+      const lastMsg = messages[messages.length - 1]
+      if (lastMsg.role === 'assistant') {
+        speakText(lastMsg.content)
+      }
+    }
+    lastMessageCountRef.current = messages.length
+  }, [messages.length, autoPlayTTS, ttsEnabled, speakText])
+
+  const handleTranscription = (text: string) => {
+    setInput(text)
+  }
 
   const handleSend = () => {
     if (!input.trim()) return
@@ -116,7 +136,7 @@ export function AgentChat() {
       </div>
 
       {/* Input */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-end">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -126,10 +146,14 @@ export function AgentChat() {
           rows={2}
           className="input flex-1 resize-none"
         />
+        <VoiceControls
+          onTranscription={handleTranscription}
+          disabled={!isConnected}
+        />
         <button
           onClick={handleSend}
           disabled={!isConnected || !input.trim()}
-          className="btn-primary self-end"
+          className="btn-primary"
         >
           Send
         </button>
@@ -209,6 +233,10 @@ function ChatMessage({ message }: { message: Message }) {
           <span className="text-xs">
             {message.timestamp.toLocaleTimeString()}
           </span>
+          <div className="flex items-center gap-1">
+          {!isUser && (
+            <TTSButton text={message.content} isUser={isUser} />
+          )}
           <button
             type="button"
             onClick={handleCopy}
@@ -246,6 +274,7 @@ function ChatMessage({ message }: { message: Message }) {
               </>
             )}
           </button>
+          </div>
         </div>
       </div>
     </div>

@@ -48,9 +48,16 @@ if [ "$ORCH_RUNNING" != "true" ]; then
         export $(grep -v '^#' "$SCRIPT_DIR/.env" | xargs)
     fi
 
+    # Check for TLS certs
+    SSL_ARGS=""
+    if [ -f "$SCRIPT_DIR/certs/cert.pem" ] && [ -f "$SCRIPT_DIR/certs/key.pem" ]; then
+        SSL_ARGS="--ssl-certfile $SCRIPT_DIR/certs/cert.pem --ssl-keyfile $SCRIPT_DIR/certs/key.pem"
+    fi
+
     nohup python -m uvicorn orchestrator.main:app \
         --host ${ORCHESTRATOR_HOST:-0.0.0.0} \
         --port ${ORCHESTRATOR_PORT:-8080} \
+        $SSL_ARGS \
         > "$SCRIPT_DIR/logs/orchestrator.log" 2>&1 &
 
     echo $! > "$SCRIPT_DIR/.orchestrator.pid"
@@ -81,8 +88,15 @@ echo ""
 ORCHESTRATOR_PORT=${ORCHESTRATOR_PORT:-8080}
 WEB_PORT=4011
 
-echo "  Web UI:       http://localhost:$WEB_PORT"
-echo "  Orchestrator: http://localhost:$ORCHESTRATOR_PORT"
+# Detect protocol
+if [ -f "certs/cert.pem" ] && [ -f "certs/key.pem" ]; then
+    PROTO="https"
+else
+    PROTO="http"
+fi
+
+echo "  Web UI:       $PROTO://localhost:$WEB_PORT"
+echo "  Orchestrator: $PROTO://localhost:$ORCHESTRATOR_PORT"
 
 # Check for Tailscale
 if [ -f ".env" ]; then
@@ -90,7 +104,7 @@ if [ -f ".env" ]; then
     if [ -n "$TAILSCALE_IP" ]; then
         echo ""
         echo "  Remote access (via Tailscale):"
-        echo "    http://$TAILSCALE_IP:$WEB_PORT"
+        echo "    $PROTO://$TAILSCALE_IP:$WEB_PORT"
     fi
 fi
 

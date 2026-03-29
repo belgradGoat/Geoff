@@ -34,6 +34,7 @@ class Agent:
     prompt: str
     working_dir: str
     provider: str = "claude"
+    model: Optional[str] = None  # e.g. "claude-sonnet-4-6" for model override
     status: AgentStatus = AgentStatus.STARTING
     pid: Optional[int] = None
     started_at: datetime = field(default_factory=utcnow)
@@ -85,6 +86,7 @@ class AgentManager:
         agent_id: Optional[str] = None,
         provider: Optional[str] = None,
         task_title: Optional[str] = None,
+        model: Optional[str] = None,
     ) -> Agent:
         """
         Launch a new agent with the specified provider.
@@ -111,6 +113,7 @@ class AgentManager:
             prompt=prompt,
             working_dir=working_dir,
             provider=provider,
+            model=model,
             task_title=task_title,
         )
 
@@ -139,8 +142,11 @@ class AgentManager:
             if custom_command:
                 provider.config.command = custom_command
 
-            # Build the command
-            cmd = provider.build_command(agent.prompt, agent.working_dir)
+            # Build the command (pass model for Claude provider)
+            if agent.model and isinstance(provider, ClaudeProvider):
+                cmd = provider.build_command(agent.prompt, agent.working_dir, model=agent.model)
+            else:
+                cmd = provider.build_command(agent.prompt, agent.working_dir)
 
             # Create the subprocess
             process = await asyncio.create_subprocess_exec(

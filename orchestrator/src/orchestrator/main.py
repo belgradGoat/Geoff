@@ -38,6 +38,13 @@ app.include_router(chat_router)
 app.include_router(github_router)
 app.include_router(chains_router)
 
+# Voice router - optional, requires mlx-audio
+try:
+    from .api.voice import router as voice_router
+    app.include_router(voice_router)
+except ImportError:
+    print("[STARTUP] Voice support unavailable - install mlx-audio: pip install mlx-audio pydub python-multipart")
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -80,6 +87,7 @@ async def root():
             "github": "/api/github",
             "chat": "/api/chat",
             "chains": "/api/chains",
+            "voice": "/api/voice",
             "health": "/health",
         },
     }
@@ -87,12 +95,25 @@ async def root():
 
 def run():
     """Run the server."""
+    import os
     settings = get_settings()
+
+    # Check for TLS certs (enables HTTPS for secure context on mobile)
+    ssl_kwargs = {}
+    cert_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "certs")
+    cert_file = os.path.join(cert_dir, "cert.pem")
+    key_file = os.path.join(cert_dir, "key.pem")
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        ssl_kwargs["ssl_certfile"] = cert_file
+        ssl_kwargs["ssl_keyfile"] = key_file
+        print(f"[STARTUP] HTTPS enabled with certs from {cert_dir}")
+
     uvicorn.run(
         "orchestrator.main:app",
         host=settings.host,
         port=settings.port,
         reload=False,
+        **ssl_kwargs,
     )
 
 

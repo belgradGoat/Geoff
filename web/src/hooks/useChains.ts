@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import { orchestrator } from '../lib/orchestrator'
 
-export type ChainType = 'research' | 'development'
+export type ChainType = 'research' | 'development' | 'osint'
 export type ChainExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 export type ChainStageStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
 

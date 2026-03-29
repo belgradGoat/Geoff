@@ -89,6 +89,7 @@ class ChainEngine:
             "status": "pending",
             "config": {
                 "provider": config.provider,
+                "model": config.model,
                 "working_dir": config.working_dir,
                 "domain_context": config.domain_context,
                 "system_prompt_prefix": config.system_prompt_prefix,
@@ -212,7 +213,7 @@ class ChainEngine:
             db.table("tasks").update({
                 "status": "done",
                 "progress": 100,
-                "result": final_result[:10000] if len(final_result) > 10000 else final_result,
+                "result": final_result,
             }).eq("id", task_id).execute()
 
         except Exception as e:

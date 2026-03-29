@@ -115,7 +115,13 @@ export function QuickAdd() {
 
       // If a chain type is selected, queue chain execution for this task
       if (task && chainType !== 'none') {
-        await executeChain(task.id, chainType)
+        const chainConfig: Record<string, unknown> = {}
+        // OSINT chain defaults: use sonnet model and eagle-journalist working dir
+        if (chainType === 'osint') {
+          chainConfig.model = 'claude-sonnet-4-6'
+          chainConfig.domain_context = 'Eagle Watchtower OSINT Pipeline. Read CLAUDE.md for full context. Use telegram-mcp and discord-mcp tools to gather intelligence from monitored channels.'
+        }
+        await executeChain(task.id, chainType, Object.keys(chainConfig).length > 0 ? chainConfig : undefined)
       }
 
       setTitle('')
@@ -206,6 +212,7 @@ Work through one task at a time. Be thorough and follow the task requirements.`
             <option value="none">No Chain</option>
             <option value="research">Research Chain</option>
             <option value="development">Dev Chain</option>
+            <option value="osint">OSINT Chain</option>
           </select>
           <button
             type="submit"

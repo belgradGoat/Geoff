@@ -11,6 +11,7 @@ import { RemoteAccess } from './components/settings/RemoteAccess'
 import { ProviderSettings } from './components/settings/ProviderSettings'
 import { AllowedPathsSettings } from './components/settings/AllowedPathsSettings'
 import { AgentChat } from './components/chat/AgentChat'
+import { VoiceSettings } from './components/settings/VoiceSettings'
 import { GitHubSettings } from './components/github/GitHubSettings'
 import { PullRequestList } from './components/github/PullRequestList'
 import { IssueList } from './components/github/IssueList'
@@ -217,6 +218,7 @@ function App() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <GitHubSettings />
               <ProviderSettings />
+              <VoiceSettings />
               <RemoteAccess />
               <AllowedPathsSettings />
             </div>

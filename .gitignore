@@ -61,6 +61,9 @@ logs/
 # PID files (from start.sh)
 .*.pid
 
+# TLS certificates
+certs/
+
 # Test coverage
 coverage/
 .coverage

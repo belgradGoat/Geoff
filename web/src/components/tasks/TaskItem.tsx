@@ -164,7 +164,12 @@ export function TaskItem({ task, onLaunchTask, isLaunching }: TaskItemProps) {
     setShowChainMenu(false)
     setIsChainLoading(true)
     try {
-      await executeChain(task.id, chainType)
+      const chainConfig: Record<string, unknown> = {}
+      if (chainType === 'osint') {
+        chainConfig.model = 'claude-sonnet-4-6'
+        chainConfig.domain_context = 'Eagle Watchtower OSINT Pipeline. Read CLAUDE.md for full context. Use telegram-mcp and discord-mcp tools to gather intelligence from monitored channels.'
+      }
+      await executeChain(task.id, chainType, Object.keys(chainConfig).length > 0 ? chainConfig : undefined)
     } finally {
       setIsChainLoading(false)
     }
@@ -272,6 +277,12 @@ export function TaskItem({ task, onLaunchTask, isLaunching }: TaskItemProps) {
                         className="w-full text-left px-3 py-1.5 text-sm text-geoff-text hover:bg-geoff-card transition-colors"
                       >
                         Development Chain
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRunChain('osint') }}
+                        className="w-full text-left px-3 py-1.5 text-sm text-geoff-text hover:bg-geoff-card transition-colors"
+                      >
+                        OSINT Chain
                       </button>
                     </div>
                   )}

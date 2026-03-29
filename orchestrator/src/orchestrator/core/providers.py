@@ -67,8 +67,10 @@ class Provider(ABC):
 class ClaudeProvider(Provider):
     """Claude Code CLI provider."""
 
-    def build_command(self, prompt: str, working_dir: Optional[str] = None) -> list[str]:
+    def build_command(self, prompt: str, working_dir: Optional[str] = None, model: Optional[str] = None) -> list[str]:
         cmd = [self.config.command]
+        if model:
+            cmd.extend(["--model", model])
         cmd.extend([self.config.prompt_flag, prompt])
         if self.config.auto_approve_flag:
             cmd.append(self.config.auto_approve_flag)
