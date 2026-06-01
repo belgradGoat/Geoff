@@ -1,5 +1,20 @@
 #Changelog
 
+## 03/30/26
+
+### Fixed
+- **Chain output routing** — Chain completions now correctly display the designated output stage result (e.g., the synthesis intelligence brief) instead of the last stage's output (e.g., memory update summary)
+
+### Added
+- **`is_output_stage` flag** — Chain stage definitions can now explicitly declare which stage produces the user-facing deliverable
+- **`is_background` flag** — Chain stages can be marked as background (side-effect only), ensuring their output is never shown to the user as the final result
+- **OSINT Chain `memory_update` stage** — New background stage that persists intelligence to memory files after synthesis completes
+- **Improved output fallback logic** — If the designated output stage produces no content, falls back to the last non-background stage instead of defaulting to "Chain completed"
+- **Synthesis stdout enforcement** — Updated synthesis prompt to require the intelligence brief in the response text, not just written to files
+- **Background stage UI treatment** — Background stages render at 50% opacity in ChainProgress; output stages get an accent ring highlight
+- **Copy-to-clipboard for task results** — Task result section now includes a copy button for easy extraction of long outputs
+- **Chain engine debug logging** — Logs stage output length and final result selection for easier troubleshooting
+
 ## 02/15/26
 
 ### Created first version of agentic chain

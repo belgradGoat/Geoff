@@ -70,7 +70,7 @@ OSINT_CHAIN = ChainDefinition(
         StageDefinition(
             name="reconnaissance",
             stage_type="reconnaissance",
-            description="Gather intelligence from Telegram, Discord, and web sources",
+            description="Gather intelligence from Telegram, Discord, X/Twitter, and web sources",
         ),
         StageDefinition(
             name="cross_reference",
@@ -86,6 +86,13 @@ OSINT_CHAIN = ChainDefinition(
             name="synthesis",
             stage_type="osint_synthesis",
             description="Compile final intelligence brief with sourced findings and confidence levels",
+            is_output_stage=True,
+        ),
+        StageDefinition(
+            name="memory_update",
+            stage_type="memory_update",
+            description="Update persistent memory with new intelligence from this chain run",
+            is_background=True,
         ),
     ],
 )

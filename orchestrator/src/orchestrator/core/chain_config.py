@@ -13,6 +13,8 @@ class StageDefinition:
     is_qc_gate: bool = False
     retry_target_stage: str | None = None
     max_qc_iterations: int = 3
+    is_output_stage: bool = False
+    is_background: bool = False
 
 
 @dataclass

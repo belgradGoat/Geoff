@@ -1,6 +1,7 @@
 """Agent process management."""
 
 import asyncio
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -142,9 +143,22 @@ class AgentManager:
             if custom_command:
                 provider.config.command = custom_command
 
-            # Build the command (pass model for Claude provider)
-            if agent.model and isinstance(provider, ClaudeProvider):
-                cmd = provider.build_command(agent.prompt, agent.working_dir, model=agent.model)
+            # Discover MCP config from working directory
+            mcp_config = None
+            if agent.working_dir and isinstance(provider, ClaudeProvider):
+                settings_path = os.path.join(
+                    os.path.expanduser(agent.working_dir),
+                    ".claude", "settings.local.json"
+                )
+                if os.path.isfile(settings_path):
+                    mcp_config = settings_path
+
+            # Build the command (pass model and mcp_config for Claude provider)
+            if isinstance(provider, ClaudeProvider):
+                cmd = provider.build_command(
+                    agent.prompt, agent.working_dir,
+                    model=agent.model, mcp_config=mcp_config
+                )
             else:
                 cmd = provider.build_command(agent.prompt, agent.working_dir)
 

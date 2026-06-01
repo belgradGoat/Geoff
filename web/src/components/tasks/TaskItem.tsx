@@ -99,6 +99,7 @@ export function TaskItem({ task, onLaunchTask, isLaunching }: TaskItemProps) {
   const [showChainMenu, setShowChainMenu] = useState(false)
   const [isChainLoading, setIsChainLoading] = useState(false)
 
+  const [copied, setCopied] = useState(false)
   const chainExecution = getChainForTask(task.id)
   const isChainRunning = chainExecution && (chainExecution.status === 'running' || chainExecution.status === 'pending')
 
@@ -447,9 +448,31 @@ export function TaskItem({ task, onLaunchTask, isLaunching }: TaskItemProps) {
                     </div>
                   )}
                   {task.result && (
-                    <div className="col-span-2">
-                      <span className="text-geoff-text-dim">Result:</span>
-                      <span className="ml-2 text-geoff-success">{task.result}</span>
+                    <div className="col-span-2 relative">
+                      <div className="flex items-start justify-between">
+                        <span className="text-geoff-text-dim">Result:</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigator.clipboard.writeText(task.result || '')
+                            setCopied(true)
+                            setTimeout(() => setCopied(false), 2000)
+                          }}
+                          className="p-1 rounded transition-colors text-geoff-text-dim hover:text-geoff-accent hover:bg-geoff-accent-dim"
+                          title="Copy result to clipboard"
+                        >
+                          {copied ? (
+                            <svg className="w-4 h-4 text-geoff-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      <span className="text-geoff-success whitespace-pre-wrap">{task.result}</span>
                     </div>
                   )}
                 </div>

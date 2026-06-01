@@ -92,6 +92,8 @@ export function ChainProgress({ execution, compact = true }: ChainProgressProps)
         <div className="flex items-center gap-1">
           {stages.map((stage, index) => {
             const config = stageStatusConfig[stage.status as string] || stageStatusConfig.pending
+            const isBackground = stage.result_data?.is_background === true
+            const isOutputStage = stage.result_data?.is_output_stage === true
             return (
               <div key={stage.id} className="flex items-center">
                 <button
@@ -99,8 +101,8 @@ export function ChainProgress({ execution, compact = true }: ChainProgressProps)
                     e.stopPropagation()
                     setExpandedStage(expandedStage === stage.id ? null : stage.id)
                   }}
-                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors ${config.bg} ${config.color} hover:opacity-80`}
-                  title={`${formatStageName(stage.stage_name)}: ${stage.status}${stage.retry_count > 0 ? ` (retry ${stage.retry_count})` : ''}`}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors ${config.bg} ${config.color} hover:opacity-80 ${isBackground ? 'opacity-50' : ''} ${isOutputStage ? 'ring-1 ring-geoff-accent' : ''}`}
+                  title={`${formatStageName(stage.stage_name)}: ${stage.status}${isBackground ? ' (background)' : ''}${isOutputStage ? ' (output)' : ''}${stage.retry_count > 0 ? ` (retry ${stage.retry_count})` : ''}`}
                 >
                   <StageIcon status={stage.status as string} />
                   <span className="hidden sm:inline">{formatStageName(stage.stage_name)}</span>

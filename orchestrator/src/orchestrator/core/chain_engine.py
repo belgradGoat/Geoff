@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -9,6 +10,8 @@ from .chain_config import ChainDefinition, ChainExecutionConfig, StageDefinition
 from .chain_registry import get_chain
 from .stage_runner import StageRunner
 from .config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> str:
@@ -110,6 +113,10 @@ class ChainEngine:
                 "stage_type": stage.stage_type,
                 "status": "pending",
                 "max_retries": stage.max_qc_iterations if stage.is_qc_gate else 3,
+                "result_data": {
+                    "is_output_stage": stage.is_output_stage,
+                    "is_background": stage.is_background,
+                },
             }
             db.table("chain_stages").insert(stage_data).execute()
 
@@ -193,6 +200,8 @@ class ChainEngine:
                         raise RuntimeError(f"Stage {stage.name} failed: {result.error}")
                     accumulated_context[stage.name] = result.output
 
+                logger.info(f"Stage '{stage.name}' completed. Output length: {len(result.output)} chars")
+
                 # Update task progress
                 progress = int(((stage_index + 1) / len(stages)) * 100)
                 db.table("tasks").update({"progress": progress}).eq("id", task_id).execute()
@@ -200,8 +209,25 @@ class ChainEngine:
                 stage_index += 1
 
             # Chain completed successfully
-            # Combine all stage outputs as the final result
-            final_result = accumulated_context.get(stages[-1].name, "Chain completed")
+            # Find the designated output stage result
+            final_result = "Chain completed"
+            output_stage_name = None
+            for stage in stages:
+                if stage.is_output_stage:
+                    output_stage_name = stage.name
+                    break
+
+            if output_stage_name and accumulated_context.get(output_stage_name):
+                final_result = accumulated_context[output_stage_name]
+            else:
+                # Fallback: use last non-background stage output
+                for stage in reversed(stages):
+                    if not stage.is_background and accumulated_context.get(stage.name):
+                        final_result = accumulated_context[stage.name]
+                        break
+
+            logger.info(f"Output stage: {output_stage_name}, final_result length: {len(final_result)} chars")
+            logger.info(f"Final result preview: {final_result[:200]}")
 
             db.table("chain_executions").update({
                 "status": "completed",

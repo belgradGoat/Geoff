@@ -9,11 +9,12 @@ This guide covers the architecture, technical implementation, and extension poin
 3. [Database Schema](#database-schema)
 4. [MCP Server](#mcp-server)
 5. [Orchestrator](#orchestrator)
-6. [GitHub API Integration](#github-api-integration)
-7. [Web UI](#web-ui)
-8. [Security](#security)
-9. [Extending the System](#extending-the-system)
-10. [Troubleshooting](#troubleshooting)
+6. [Chain Orchestration](#chain-orchestration)
+7. [GitHub API Integration](#github-api-integration)
+8. [Web UI](#web-ui)
+9. [Security](#security)
+10. [Extending the System](#extending-the-system)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -403,14 +404,20 @@ orchestrator/
     ├── main.py              # FastAPI app entry
     ├── api/
     │   ├── agents.py        # REST endpoints
+    │   ├── chains.py        # Chain execution endpoints
     │   ├── chat.py          # Chat session endpoints
-    │   ├── github.py        # GitHub API endpoints (NEW)
+    │   ├── github.py        # GitHub API endpoints
     │   └── websocket.py     # WebSocket streaming
     └── core/
         ├── config.py        # Settings management
         ├── security.py      # API key middleware
         ├── providers.py     # Multi-provider abstraction
         ├── agent_manager.py # Process management
+        ├── chain_config.py  # Chain/stage dataclasses
+        ├── chain_engine.py  # Chain execution orchestrator
+        ├── chain_registry.py # Built-in chain definitions
+        ├── stage_runner.py  # Individual stage execution
+        ├── prompt_builder.py # Stage prompt assembly
         ├── commands.py      # Slash command registry
         └── command_processor.py # Command routing
 ```
@@ -465,6 +472,52 @@ process = await asyncio.create_subprocess_exec(
 )
 ```
 
+### Chain Orchestration
+
+The chain system enables multi-stage workflows where each stage spawns an independent AI agent. Stages run sequentially, with accumulated context passed forward.
+
+#### Core Modules
+
+| Module | Purpose |
+|--------|---------|
+| `chain_config.py` | Dataclasses: `StageDefinition`, `ChainDefinition`, `ChainExecutionConfig`, `StageResult` |
+| `chain_registry.py` | Built-in chain definitions (research, development, osint) and `get_chain()` lookup |
+| `chain_engine.py` | `ChainEngine.execute_chain()` — creates DB records, runs stages sequentially, handles QC retry loops |
+| `stage_runner.py` | `StageRunner.run_stage()` — spawns a single agent for one stage and captures output |
+| `prompt_builder.py` | `PromptBuilder.build_prompt()` — assembles the full prompt from templates + accumulated context |
+
+#### Stage Flags
+
+`StageDefinition` supports two flags that control output routing:
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `is_output_stage` | `False` | When `True`, this stage's output becomes the task's final `result`. Only one stage per chain should set this. |
+| `is_background` | `False` | When `True`, this stage runs but its output is never shown to the user. Used for side-effect stages like memory updates. |
+
+**Output selection logic** (`chain_engine.py`):
+1. Find the stage with `is_output_stage=True` and use its output
+2. If that stage produced no output, fall back to the last non-background stage
+3. If no stages have these flags (backward-compatible), use the last stage's output
+
+#### Built-in Chains
+
+| Chain | Stages | Output Stage |
+|-------|--------|--------------|
+| **Research** | deep_research, gap_analysis, refinement, polish | polish (last stage, default behavior) |
+| **Development** | planning, implementation, qc_review (QC gate), documentation | documentation (last stage, default behavior) |
+| **OSINT** | reconnaissance, cross_reference, analysis, synthesis, memory_update | synthesis (`is_output_stage=True`); memory_update is `is_background=True` |
+
+#### QC Gates
+
+A stage with `is_qc_gate=True` triggers a retry loop. If QC fails (JSON `{"passed": false}`), the engine re-runs the `retry_target_stage` with QC feedback, then re-runs QC. Repeats up to `max_qc_iterations` times.
+
+#### Database Tables
+
+- **`chain_templates`** — Stores chain type definitions (one row per built-in chain)
+- **`chain_executions`** — One row per chain run, tracks status, current stage index, accumulated context
+- **`chain_stages`** — One row per stage per execution, tracks status, agent_id, result, retry_count. The `result_data` JSONB column stores `is_output_stage` and `is_background` flags for UI rendering.
+
 ### API Endpoints
 
 #### Agent Endpoints
@@ -478,6 +531,15 @@ process = await asyncio.create_subprocess_exec(
 | GET | `/api/agents/:id/output` | Get buffered output |
 | WS | `/api/agents/:id/stream` | Live output stream |
 | GET | `/api/agents/providers` | List available providers |
+
+#### Chain Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/chains/execute` | Start a chain execution for a task |
+| GET | `/api/chains/types` | List available chain types |
+| GET | `/api/chains/:id` | Get chain execution status and stages |
+| POST | `/api/chains/:id/stop` | Stop a running chain |
 
 #### Chat Endpoints
 

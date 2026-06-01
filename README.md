@@ -95,6 +95,8 @@ For remote access from your phone, use your Tailscale IP (shown after setup).
 | **Review PRs** | View diffs, approve, request changes, merge — all from your phone |
 | **Assign PRs to agents** | Have an AI agent review or fix a PR for you |
 | **Task ↔ Issue sync** | Completing a task closes the linked GitHub issue, and vice versa |
+| **Chain orchestration** | Run multi-stage workflows: Research, Development, and OSINT chains |
+| **OSINT intelligence briefs** | Gather, cross-reference, analyze, and synthesize intelligence from Telegram, Discord, Gmail, and web sources |
 
 ---
 
