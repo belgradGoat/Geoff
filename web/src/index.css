@@ -5,6 +5,10 @@
 @layer base {
   body {
     @apply bg-geoff-bg text-geoff-text font-sans antialiased;
+    /* Respect the iOS notch / home indicator when running as a native app.
+       Harmless on web where the env() insets resolve to 0. */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   /* Custom scrollbar for dark theme */

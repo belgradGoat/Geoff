@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { App } from '@capacitor/app'
+import { Network } from '@capacitor/network'
 import { orchestrator } from '../lib/orchestrator'
 
 export interface Message {
@@ -19,6 +21,9 @@ interface ChatState {
   pendingAssistantMessage: string | null
   reconnectAttempts: number
   lastDisconnectTime: number | null
+  // Authoritative server buffer position the client has rendered, used as the
+  // catch-up offset on reconnect so backgrounded output is replayed exactly once.
+  outputLinesSeen: number
 
   // Actions
   startSession: (workingDir?: string) => Promise<void>
@@ -52,6 +57,7 @@ export const useChat = create<ChatState>()(
       pendingAssistantMessage: null,
       reconnectAttempts: 0,
       lastDisconnectTime: null,
+      outputLinesSeen: 0,
 
       startSession: async (workingDir) => {
         try {
@@ -71,13 +77,13 @@ export const useChat = create<ChatState>()(
             } else {
               // Session expired/not found - clear it and create new
               console.log('[SESSION] Existing session expired, creating new one...')
-              set({ sessionId: null })
+              set({ sessionId: null, outputLinesSeen: 0 })
             }
           }
 
-          // Launch a new chat-mode agent
+          // Launch a new chat-mode agent (fresh server buffer → offset resets)
           const session = await orchestrator.startChatSession(workingDir)
-          set({ sessionId: session.id, reconnectAttempts: 0 })
+          set({ sessionId: session.id, reconnectAttempts: 0, outputLinesSeen: 0 })
 
           // Connect WebSocket
           get().connectWebSocket(session.id)
@@ -91,14 +97,22 @@ export const useChat = create<ChatState>()(
       },
 
       connectWebSocket: (sessionId: string) => {
+        // Any in-flight partial is re-sent by server catch-up from `outputLinesSeen`,
+        // so drop it here to avoid double-rendering on reconnect.
+        set({ pendingAssistantMessage: null })
+
         const ws = orchestrator.connectChatWebSocket(sessionId, {
           onMessage: (data) => {
             if (data.type === 'output' && data.data) {
               // Accumulate streaming output into pending message
               get().appendToAssistant(data.data)
             } else if (data.type === 'message_complete') {
-              // Finalize the accumulated message
+              // Finalize the accumulated message and advance the catch-up offset
+              // to the server's authoritative buffer position.
               get().finalizeAssistantMessage()
+              if (typeof data.buffer_len === 'number') {
+                set({ outputLinesSeen: data.buffer_len })
+              }
               set({ isTyping: false })
             } else if (data.type === 'typing') {
               set({ isTyping: true })
@@ -130,7 +144,7 @@ export const useChat = create<ChatState>()(
             console.error('[WS] Error:', error)
             set({ isConnected: false })
           },
-        })
+        }, get().outputLinesSeen)
 
         ws.onopen = () => {
           console.log('[WS] Connection opened')
@@ -167,7 +181,7 @@ export const useChat = create<ChatState>()(
             content:
               'Failed to reconnect after multiple attempts. Session may have expired.',
           })
-          set({ sessionId: null, isReconnecting: false })
+          set({ sessionId: null, isReconnecting: false, outputLinesSeen: 0 })
           return
         }
 
@@ -203,7 +217,7 @@ export const useChat = create<ChatState>()(
               role: 'system',
               content: 'Session expired. Please start a new session.',
             })
-            set({ sessionId: null, isReconnecting: false })
+            set({ sessionId: null, isReconnecting: false, outputLinesSeen: 0 })
             return false
           }
 
@@ -227,31 +241,43 @@ export const useChat = create<ChatState>()(
       },
 
       setupVisibilityListener: () => {
-        const handleVisibilityChange = () => {
-          if (document.hidden) {
-            // Page hidden (mobile backgrounded, tab switched)
-            console.log('[VISIBILITY] Page hidden')
-            // WebSocket will naturally disconnect, but session stays alive
-          } else {
-            // Page visible again
-            console.log('[VISIBILITY] Page visible')
-            const { sessionId, isConnected } = get()
-
-            // If we have a session but not connected, try to reconnect
-            if (sessionId && !isConnected) {
-              console.log(
-                '[VISIBILITY] Attempting reconnection after visibility restore'
-              )
-              get().attemptReconnect()
-            }
+        // Shared reconnect trigger. On iOS the WebSocket (and JS backoff timers)
+        // die while backgrounded, so reconnection must be driven by the OS waking
+        // the app — not by the in-page setTimeout chain. We reset the attempt
+        // counter so a long background never permanently exhausts retries.
+        const triggerReconnect = (source: string) => {
+          const { sessionId, isConnected, isReconnecting } = get()
+          // Guard against duplicate triggers: iOS fires appStateChange + resume
+          // together (and the web shim also fires visibilitychange).
+          if (sessionId && !isConnected && !isReconnecting) {
+            console.log(`[RESUME] Reconnecting after ${source}`)
+            set({ reconnectAttempts: 0 })
+            get().attemptReconnect()
           }
         }
 
+        // --- Web fallback: visibilitychange (unreliable on iOS, kept for browsers) ---
+        const handleVisibilityChange = () => {
+          if (!document.hidden) triggerReconnect('visibility restore')
+        }
         document.addEventListener('visibilitychange', handleVisibilityChange)
 
-        // Return cleanup function
+        // --- Native: Capacitor app lifecycle + network status ---
+        // These plugins ship web implementations too, so this is safe in a browser.
+        const appHandle = App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) triggerReconnect('app foreground')
+        })
+        const resumeHandle = App.addListener('resume', () => triggerReconnect('app resume'))
+        const netHandle = Network.addListener('networkStatusChange', (status) => {
+          if (status.connected) triggerReconnect('network online')
+        })
+
+        // Return combined cleanup
         return () => {
           document.removeEventListener('visibilitychange', handleVisibilityChange)
+          appHandle.then((h) => h.remove())
+          resumeHandle.then((h) => h.remove())
+          netHandle.then((h) => h.remove())
         }
       },
 
@@ -266,6 +292,7 @@ export const useChat = create<ChatState>()(
           isConnected: false,
           ws: null,
           reconnectAttempts: 0,
+          outputLinesSeen: 0,
         })
         get().addMessage({ role: 'system', content: 'Session ended.' })
       },
@@ -289,6 +316,7 @@ export const useChat = create<ChatState>()(
           isConnected: false,
           ws: null,
           reconnectAttempts: 0,
+          outputLinesSeen: 0,
         })
 
         // Add system message
@@ -355,10 +383,11 @@ export const useChat = create<ChatState>()(
     }),
     {
       name: 'geoff-chat-storage',
-      // Only persist sessionId and messages - not WebSocket state
+      // Only persist sessionId, messages, and the catch-up offset - not WebSocket state
       partialize: (state) => ({
         sessionId: state.sessionId,
         messages: state.messages,
+        outputLinesSeen: state.outputLinesSeen,
       }),
       // Rehydrate Date objects from localStorage (they get serialized as strings)
       onRehydrateStorage: () => (state) => {

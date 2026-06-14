@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
+import { App as CapacitorApp } from '@capacitor/app'
+import { initNativeShell } from './lib/native'
 import { useTasks } from './hooks/useTasks'
 import { useProjects } from './hooks/useProjects'
 import { useChains } from './hooks/useChains'
@@ -79,6 +81,22 @@ function App() {
     const unsubscribeChains = subscribeToChainChanges()
     return unsubscribeChains
   }, [fetchTemplates, fetchExecutions, subscribeToChainChanges])
+
+  // Native shell init + reconcile-on-resume. iOS suspends the app while
+  // backgrounded, so Supabase/HTTP state can go stale; re-fetch when it wakes.
+  useEffect(() => {
+    initNativeShell()
+    const handle = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) {
+        fetchTasks()
+        fetchExecutions()
+        fetchProjects()
+      }
+    })
+    return () => {
+      handle.then((h) => h.remove())
+    }
+  }, [fetchTasks, fetchExecutions, fetchProjects])
 
   const selectedProject = useProjects.getState().projects.find(p => p.id === projectFilter)
 

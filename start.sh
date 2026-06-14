@@ -48,9 +48,18 @@ if [ "$ORCH_RUNNING" != "true" ]; then
         export $(grep -v '^#' "$SCRIPT_DIR/.env" | xargs)
     fi
 
-    # Check for TLS certs
+    # Check for TLS certs.
+    # Prefer a real Tailscale cert (certs/tailscale.crt|key) if present — iOS App
+    # Transport Security rejects the self-signed certs/cert.pem, so the native app
+    # needs a valid cert. Generate with:
+    #   tailscale cert --cert-file certs/tailscale.crt --key-file certs/tailscale.key <host>.<tailnet>.ts.net
+    # Override explicitly with TLS_CERT / TLS_KEY env vars if you keep certs elsewhere.
     SSL_ARGS=""
-    if [ -f "$SCRIPT_DIR/certs/cert.pem" ] && [ -f "$SCRIPT_DIR/certs/key.pem" ]; then
+    if [ -n "$TLS_CERT" ] && [ -n "$TLS_KEY" ] && [ -f "$TLS_CERT" ] && [ -f "$TLS_KEY" ]; then
+        SSL_ARGS="--ssl-certfile $TLS_CERT --ssl-keyfile $TLS_KEY"
+    elif [ -f "$SCRIPT_DIR/certs/tailscale.crt" ] && [ -f "$SCRIPT_DIR/certs/tailscale.key" ]; then
+        SSL_ARGS="--ssl-certfile $SCRIPT_DIR/certs/tailscale.crt --ssl-keyfile $SCRIPT_DIR/certs/tailscale.key"
+    elif [ -f "$SCRIPT_DIR/certs/cert.pem" ] && [ -f "$SCRIPT_DIR/certs/key.pem" ]; then
         SSL_ARGS="--ssl-certfile $SCRIPT_DIR/certs/cert.pem --ssl-keyfile $SCRIPT_DIR/certs/key.pem"
     fi
 
@@ -89,7 +98,9 @@ ORCHESTRATOR_PORT=${ORCHESTRATOR_PORT:-8080}
 WEB_PORT=4011
 
 # Detect protocol
-if [ -f "certs/cert.pem" ] && [ -f "certs/key.pem" ]; then
+if { [ -f "certs/tailscale.crt" ] && [ -f "certs/tailscale.key" ]; } || \
+   { [ -f "certs/cert.pem" ] && [ -f "certs/key.pem" ]; } || \
+   { [ -n "$TLS_CERT" ] && [ -n "$TLS_KEY" ]; }; then
     PROTO="https"
 else
     PROTO="http"

@@ -25,6 +25,10 @@ parts/
 sdist/
 var/
 wheels/
+
+# The generic Python `lib/` rule above also matched the web app's source dir,
+# silently excluding the API/Supabase/voice clients from git. Re-include it.
+!web/src/lib/
 *.egg-info/
 .installed.cfg
 *.egg

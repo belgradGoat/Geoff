@@ -101,9 +101,17 @@ async def chat_websocket(
     websocket: WebSocket,
     session_id: str,
     api_key: str = Query(..., alias="api_key"),
+    since: int = Query(0, alias="since"),
 ):
     """
     Bidirectional WebSocket for chat communication.
+
+    Query params:
+    - api_key: auth
+    - since: number of output lines the client has already rendered. On
+      (re)connect the server replays `output_buffer[since:]` so a client that
+      was backgrounded (e.g. phone locked) catches up on output produced while
+      its socket was down, without re-sending the whole conversation.
 
     Messages from client:
     - { "type": "input", "data": "user message" }
@@ -152,6 +160,16 @@ async def chat_websocket(
         await websocket.close(code=4006)
         return
 
+    # Catch-up: replay output produced while the client was disconnected.
+    # `since` is the number of output lines the client has already rendered.
+    buffer_len = len(agent.output_buffer)
+    if 0 <= since < buffer_len:
+        for line in agent.output_buffer[since:]:
+            await websocket.send_json({"type": "output", "data": line})
+        # Finalize the (now caught-up) assistant message on the client and tell it
+        # the authoritative buffer position to resume from.
+        await websocket.send_json({"type": "message_complete", "buffer_len": buffer_len})
+
     async def receive_and_respond():
         """Handle incoming messages and stream responses."""
         try:
@@ -193,8 +211,12 @@ async def chat_websocket(
                             async for line in manager.send_chat_message(session_id, user_input):
                                 await websocket.send_json({"type": "output", "data": line})
 
-                        # Signal message complete
-                        await websocket.send_json({"type": "message_complete"})
+                        # Signal message complete + authoritative buffer position
+                        # (used by clients to compute reconnect catch-up offset).
+                        await websocket.send_json({
+                            "type": "message_complete",
+                            "buffer_len": len(agent.output_buffer),
+                        })
 
                     except Exception as e:
                         await websocket.send_json({
