@@ -48,6 +48,17 @@ if [ "$ORCH_RUNNING" != "true" ]; then
         export $(grep -v '^#' "$SCRIPT_DIR/.env" | xargs)
     fi
 
+    # Auto-renew the Tailscale TLS cert (Let's Encrypt certs last ~90 days; an expired
+    # cert breaks the iOS app and remote browsers). This is a no-op while the cert is
+    # still fresh, and never aborts startup if Tailscale is unavailable.
+    TS_CERT_HOSTNAME="${TS_CERT_HOSTNAME:-demeter.tail7eba46.ts.net}"
+    if command -v tailscale >/dev/null 2>&1 && [ -f "$SCRIPT_DIR/certs/tailscale.crt" ]; then
+        tailscale cert \
+            --cert-file "$SCRIPT_DIR/certs/tailscale.crt" \
+            --key-file "$SCRIPT_DIR/certs/tailscale.key" \
+            "$TS_CERT_HOSTNAME" >/dev/null 2>&1 || true
+    fi
+
     # Check for TLS certs.
     # Prefer a real Tailscale cert (certs/tailscale.crt|key) if present — iOS App
     # Transport Security rejects the self-signed certs/cert.pem, so the native app

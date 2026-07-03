@@ -3,8 +3,14 @@ import react from '@vitejs/plugin-react'
 import fs from 'fs'
 import path from 'path'
 
-const certPath = path.resolve(__dirname, '../certs/cert.pem')
-const keyPath = path.resolve(__dirname, '../certs/key.pem')
+// Prefer the publicly-trusted Tailscale cert (matches the MagicDNS hostname that the
+// iOS app and remote browsers connect to) so hostname access has no cert warning.
+// Fall back to the self-signed IP cert (cert.pem) for plain localhost/IP use.
+const tsCert = path.resolve(__dirname, '../certs/tailscale.crt')
+const tsKey = path.resolve(__dirname, '../certs/tailscale.key')
+const useTailscale = fs.existsSync(tsCert) && fs.existsSync(tsKey)
+const certPath = useTailscale ? tsCert : path.resolve(__dirname, '../certs/cert.pem')
+const keyPath = useTailscale ? tsKey : path.resolve(__dirname, '../certs/key.pem')
 const hasCerts = fs.existsSync(certPath) && fs.existsSync(keyPath)
 
 export default defineConfig({
